@@ -10,13 +10,26 @@ android {
         applicationId "com.chuhanyuan.xiangqi"
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
+    }
+
+    signingConfigs {
+        cqy {
+            storeFile rootProject.file("keystore/cqy.keystore")
+            storePassword "chuhan2026"
+            keyAlias "cqy"
+            keyPassword "chuhan2026"
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.cqy
+        }
+        debug {
+            signingConfig signingConfigs.cqy
         }
     }
     compileOptions {

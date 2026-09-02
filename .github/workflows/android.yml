@@ -6,36 +6,46 @@ on:
   workflow_dispatch:
 
 jobs:
-  android-build:
-    name: Build Debug APK
+  unit-test:
+    name: JVM Unit Tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+      - name: Compile sources + run logic tests
+        run: |
+          mkdir -p /tmp/tc
+          javac -d /tmp/tc -encoding UTF-8 \
+            app/src/main/java/com/chuhanyuan/xiangqi/GameLogic.java \
+            app/src/main/java/com/chuhanyuan/xiangqi/AiService.java \
+            app/src/test/java/com/chuhanyuan/xiangqi/LogicTest.java
+          java -cp /tmp/tc com.chuhanyuan.xiangqi.LogicTest
 
-      - name: Setup Gradle cache
-        uses: actions/cache@v4
+  build:
+    name: Build APK (needs unit-test green)
+    needs: unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: ${{ runner.os }}-gradle-
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-
-      - name: Build with Gradle
+      - name: Build debug APK (fixed keystore)
         run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: chuhanqiyuan-debug-apk
           path: app/build/outputs/apk/debug/*.apk
