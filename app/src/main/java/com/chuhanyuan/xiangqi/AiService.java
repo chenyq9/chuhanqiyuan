@@ -83,7 +83,16 @@ public class AiService {
     }
 
     private String post(String body) throws Exception {
-        URL url = new URL(base + "/chat/completions");
+        // 兼容两种填法：base 填 https://host/v1 或完整 https://host/v1/chat/completions 均可
+        String endpoint = base;
+        if (endpoint == null || endpoint.trim().isEmpty()) {
+            endpoint = "https://api.openai.com/v1";
+        }
+        if (!endpoint.endsWith("/chat/completions")) {
+            if (!endpoint.endsWith("/")) endpoint = endpoint + "/";
+            endpoint = endpoint + "chat/completions";
+        }
+        URL url = new URL(endpoint);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("POST");
         conn.setConnectTimeout(20000);
