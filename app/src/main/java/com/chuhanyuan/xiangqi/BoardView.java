@@ -11,6 +11,16 @@ import android.widget.FrameLayout;
 /** 木质棋盘：9×10线、楚河汉界、九宫斜线、炮兵位标记。不含任何规则。 */
 public class BoardView extends FrameLayout {
 
+    public interface GeometryListener {
+        void onGeometryChanged();
+    }
+
+    private GeometryListener geometryListener;
+
+    public void setGeometryListener(GeometryListener l) {
+        geometryListener = l;
+    }
+
     private Paint line, fill, river, text;
     private float tile = 0f, originX = 0f, originY = 0f, boardW = 0f, boardH = 0f;
 
@@ -59,6 +69,7 @@ public class BoardView extends FrameLayout {
         originX = (w - boardW) / 2f;
         originY = (h - boardH) / 2f;
         invalidate();
+        if (geometryListener != null) geometryListener.onGeometryChanged();
     }
 
     public float getTile() { return tile; }
