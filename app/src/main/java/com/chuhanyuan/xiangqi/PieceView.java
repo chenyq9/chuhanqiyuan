@@ -25,6 +25,7 @@ public class PieceView extends AppCompatTextView {
     private final OnPieceMoved listener;
 
     private int row, col;
+    private int homeRow, homeCol; // 初始位（重开局飞回用）
     private int downRow, downCol;
     private float startX, startY, lastRX, lastRY;
     private boolean dragging, moved, selected;
@@ -105,6 +106,28 @@ public class PieceView extends AppCompatTextView {
     public void setSelected(boolean s) {
         selected = s;
         updateBg();
+    }
+
+    public void setHome(int r, int c) {
+        homeRow = r;
+        homeCol = c;
+    }
+
+    public int getHomeRow() { return homeRow; }
+    public int getHomeCol() { return homeCol; }
+
+    /** 从战利品区飞回某格并恢复大小（重开局/取回）。 */
+    public void flyHome(int r, int c) {
+        setEnabled(true);
+        setVisibility(View.VISIBLE);
+        animate().cancel();
+        animate().x(targetX(c)).y(targetY(r)).scaleX(1f).scaleY(1f).alpha(1f)
+                .setDuration(400).withEndAction(new Runnable() {
+                    @Override
+                    public void run() {
+                        place(r, c);
+                    }
+                });
     }
 
     private boolean touch(MotionEvent e) {
