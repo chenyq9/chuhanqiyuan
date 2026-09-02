@@ -269,7 +269,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     private void parkPieceInBottomArea(PieceView pv){
         if(pv==null||!pieces.contains(pv))return;
         int r=pv.getRow(),c=pv.getCol();
-        game.put(r,c,0);
+        game.put(r, c, (char)0); // 清空格
         pieces.remove(pv);
         if(pv.isRed)capturedRed.add(pv);else capturedBlack.add(pv);
         pv.animate().cancel();pv.setSelected(false);pv.setEnabled(false);pv.setVisibility(View.INVISIBLE);
