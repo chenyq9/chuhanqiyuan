@@ -9,10 +9,50 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <!-- 工具栏占自己的空间，不再覆盖棋盘。 -->
+        <LinearLayout
+            android:id="@+id/topBar"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:gravity="center_vertical|end"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:id="@+id/btnNew"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_margin="3dp"
+                android:background="@drawable/bubble_bg"
+                android:padding="8dp"
+                android:contentDescription="@string/new_game"
+                android:src="@android:drawable/ic_menu_rotate" />
+
+            <ImageView
+                android:id="@+id/btnChat"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_margin="3dp"
+                android:background="@drawable/bubble_bg"
+                android:padding="8dp"
+                android:contentDescription="@string/chat_history"
+                android:src="@android:drawable/ic_menu_recent_history" />
+
+            <ImageView
+                android:id="@+id/btnCfg"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_margin="3dp"
+                android:background="@drawable/bubble_bg"
+                android:padding="8dp"
+                android:contentDescription="@string/settings"
+                android:src="@android:drawable/ic_menu_preferences" />
+        </LinearLayout>
+
         <HorizontalScrollView
             android:id="@+id/capturedTopScroll"
             android:layout_width="match_parent"
-            android:layout_height="58dp"
+            android:layout_height="48dp"
             android:scrollbars="none">
             <LinearLayout
                 android:id="@+id/capturedTopArea"
@@ -21,8 +61,8 @@
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:clipChildren="false"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp" />
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp" />
         </HorizontalScrollView>
 
         <com.chuhanyuan.xiangqi.BoardView
@@ -30,12 +70,12 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:layout_gravity="center_horizontal" />
+            android:layout_gravity="center" />
 
         <HorizontalScrollView
             android:id="@+id/capturedScroll"
             android:layout_width="match_parent"
-            android:layout_height="58dp"
+            android:layout_height="48dp"
             android:scrollbars="none">
             <LinearLayout
                 android:id="@+id/capturedArea"
@@ -44,8 +84,8 @@
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:clipChildren="false"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp" />
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp" />
         </HorizontalScrollView>
     </LinearLayout>
 
@@ -54,18 +94,18 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="8dp"
-        android:layout_marginStart="56dp"
-        android:layout_marginEnd="56dp"
+        android:layout_marginTop="58dp"
+        android:layout_marginStart="64dp"
+        android:layout_marginEnd="64dp"
         android:background="@drawable/bubble_bg"
         android:maxLines="4"
         android:ellipsize="end"
         android:paddingStart="14dp"
         android:paddingEnd="14dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
         android:textColor="@color/board_line"
-        android:textSize="15sp"
+        android:textSize="14sp"
         android:visibility="gone"
         android:clickable="false" />
 
@@ -81,95 +121,59 @@
         android:visibility="gone"
         android:clickable="false" />
 
-    <ImageView
-        android:id="@+id/btnNew"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="top|end"
-        android:layout_margin="10dp"
-        android:background="@drawable/bubble_bg"
-        android:padding="9dp"
-        android:contentDescription="@string/new_game"
-        android:src="@android:drawable/ic_menu_rotate" />
-
-    <ImageView
-        android:id="@+id/btnChatLog"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="top|end"
-        android:layout_marginEnd="10dp"
-        android:layout_marginTop="122dp"
-        android:background="@drawable/bubble_bg"
-        android:padding="9dp"
-        android:contentDescription="查看聊天记录"
-        android:src="@android:drawable/ic_menu_recent_history" />
-
-    <ImageView
-        android:id="@+id/btnCfg"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="top|end"
-        android:layout_marginEnd="10dp"
-        android:layout_marginTop="66dp"
-        android:background="@drawable/bubble_bg"
-        android:padding="9dp"
-        android:contentDescription="@string/settings"
-        android:src="@android:drawable/ic_menu_preferences" />
-
     <LinearLayout
         android:id="@+id/bottomPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:paddingStart="10dp"
-        android:paddingEnd="10dp"
-        android:paddingBottom="6dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="4dp"
         android:clickable="false">
-
-        <TextView
-            android:id="@+id/tvChat"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="24dp"
-            android:maxLines="5"
-            android:ellipsize="start"
-            android:textColor="@color/board_line"
-            android:textSize="13sp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="3dp"
-            android:paddingBottom="3dp" />
 
         <TextView
             android:id="@+id/tvTurnStatus"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="● 轮到你"
+            android:layout_height="20dp"
+            android:gravity="center_vertical"
+            android:text="● 对方正在思考…"
             android:textColor="@color/board_line"
             android:textSize="12sp"
-            android:paddingStart="8dp"
-            android:paddingBottom="2dp" />
+            android:visibility="gone"
+            android:paddingStart="6dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:orientation="horizontal"
             android:gravity="center_vertical">
             <EditText
                 android:id="@+id/etInput"
                 android:layout_width="0dp"
-                android:layout_height="44dp"
+                android:layout_height="40dp"
                 android:layout_weight="1"
                 android:hint="@string/say_something"
                 android:textSize="14sp"
                 android:maxLines="1"
+                android:singleLine="true"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
                 android:inputType="textShortMessage" />
             <Button
-                android:id="@+id/btnSend"
-                android:layout_width="58dp"
-                android:layout_height="44dp"
+                android:id="@+id/btnFree"
+                android:layout_width="54dp"
+                android:layout_height="40dp"
                 android:minWidth="0dp"
+                android:layout_marginStart="5dp"
+                android:text="自由"
+                android:textSize="12sp" />
+            <Button
+                android:id="@+id/btnSend"
+                android:layout_width="50dp"
+                android:layout_height="40dp"
+                android:minWidth="0dp"
+                android:layout_marginStart="5dp"
                 android:text="@string/send"
                 android:textSize="13sp" />
         </LinearLayout>
