@@ -73,7 +73,7 @@ public class AiService {
     private String buildBody() {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"model\":\"").append(esc(model)).append("\",\"temperature\":0.8,");
-        sb.append("\"tools\":").append(TOOL_JSON).append(",\"tool_choice\":\"auto\",\"messages\":[");
+        sb.append("\"tools\":[").append(TOOL_JSON).append("],\"tool_choice\":\"auto\",\"messages\":[");
         sb.append("{\"role\":\"system\",\"content\":\"").append(esc(SYSTEM_PROMPT)).append("\"}");
         for (String[] m : history) {
             sb.append(",{\"role\":\"").append(m[0]).append("\",\"content\":\"").append(esc(m[1])).append("\"}");
