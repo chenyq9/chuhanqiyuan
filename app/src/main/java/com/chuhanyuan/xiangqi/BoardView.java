@@ -52,7 +52,8 @@ public class BoardView extends FrameLayout {
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         if (w <= 0 || h <= 0) return;
-        tile = Math.min(w / 9.0f, h / 10.0f);
+        float sidePad = w * 0.055f; // 半枚棋子的边距，防边线棋子被屏幕裁切
+        tile = Math.min((w - 2 * sidePad) / 9.0f, h / 10.0f);
         boardW = 9 * tile;
         boardH = 10 * tile;
         originX = (w - boardW) / 2f;
