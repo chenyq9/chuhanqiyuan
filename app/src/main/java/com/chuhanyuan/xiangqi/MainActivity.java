@@ -7,6 +7,7 @@ import android.media.SoundPool;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -80,8 +81,8 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build();
             sounds = new SoundPool.Builder().setMaxStreams(3).setAudioAttributes(attrs).build();
-            sndMove = sounds.load(this, R.raw.move);
-            sndCapture = sounds.load(this, R.raw.capture);
+            sndMove = sounds.load(this, R.raw.move, 1);
+            sndCapture = sounds.load(this, R.raw.capture, 1);
         } catch (Exception e) {
             sounds = null;
         }
@@ -293,7 +294,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     }
 
     private void playSnd(int id) {
-        if (sounds != null && id != 0) sounds.play(id, 1f, 1f, 1f, 0, 1f);
+        if (sounds != null && id != 0) sounds.play(id, 1f, 1f, 1, 0, 1f);
     }
 
     private void addTrophyChip(boolean playerSide, char kind, final PieceView victim) {
