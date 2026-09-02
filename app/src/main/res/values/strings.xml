@@ -3,6 +3,7 @@
     <string name="app_name">楚汉棋缘</string>
     <string name="new_game">重新开局</string>
     <string name="settings">设置</string>
+    <string name="chat_history">聊天记录</string>
     <string name="say_something">说点什么…</string>
     <string name="send">送</string>
     <string name="api_base_url">API 地址（如 https://api.deepseek.com/v1）</string>
