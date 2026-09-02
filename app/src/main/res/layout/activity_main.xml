@@ -8,6 +8,25 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
+        <HorizontalScrollView
+            android:id="@+id/capturedTopScroll"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/capturedTopArea"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:clipChildren="false"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp" />
+        </HorizontalScrollView>
+
         <com.chuhanyuan.xiangqi.BoardView
             android:id="@+id/boardView"
             android:layout_width="match_parent"
@@ -18,7 +37,7 @@
         <HorizontalScrollView
             android:id="@+id/capturedScroll"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="64dp"
             android:scrollbars="none">
 
             <LinearLayout
@@ -27,10 +46,11 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
+                android:clipChildren="false"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:paddingTop="4dp"
-                android:paddingBottom="56dp" />
+                android:paddingBottom="4dp" />
         </HorizontalScrollView>
     </LinearLayout>
 
