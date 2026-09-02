@@ -25,6 +25,7 @@ public class BoardView extends FrameLayout {
     private void init() {
         setClipChildren(false);
         setClipToPadding(false);
+        setWillNotDraw(false); // 容器类默认不调onDraw，必须显式打开
 
         line = new Paint(Paint.ANTI_ALIAS_FLAG);
         line.setColor(color(R.color.board_line));
@@ -51,12 +52,11 @@ public class BoardView extends FrameLayout {
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         if (w <= 0 || h <= 0) return;
-        tile = w / 9.0f;
+        tile = Math.min(w / 9.0f, h / 10.0f);
         boardW = 9 * tile;
         boardH = 10 * tile;
-        originX = 0;
+        originX = (w - boardW) / 2f;
         originY = (h - boardH) / 2f;
-        if (originY < dp(30)) originY = dp(30);
         invalidate();
     }
 

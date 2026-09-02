@@ -139,7 +139,10 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         board.post(new Runnable() {
             @Override
             public void run() {
-                for (PieceView pv : pieces) pv.place(pv.getRow(), pv.getCol());
+                for (PieceView pv : pieces) {
+                    pv.setSize(board.getTile());
+                    pv.place(pv.getRow(), pv.getCol());
+                }
             }
         });
         if (ai != null) ai.resetHistory();
