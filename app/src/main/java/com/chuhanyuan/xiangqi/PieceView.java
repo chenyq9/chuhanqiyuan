@@ -15,6 +15,7 @@ public class PieceView extends AppCompatTextView {
     public interface OnPieceMoved {
         void onPieceDropped(PieceView pv,int fromRow,int fromCol,int toRow,int toCol);
         void onPieceTapped(PieceView pv);
+        default void onPieceDroppedOutside(PieceView pv,float rawX,float rawY) {}
     }
 
     public final boolean isRed;
@@ -88,6 +89,16 @@ public class PieceView extends AppCompatTextView {
                 if(moved&&e.getActionMasked()==MotionEvent.ACTION_UP){
                     float cx=getX()+getTranslationX()+getLayoutParams().width/2f;
                     float cy=getY()+getTranslationY()+getLayoutParams().height/2f;
+                    int[] loc=new int[2]; board.getLocationOnScreen(loc);
+                    float bx=e.getRawX()-loc[0], by=e.getRawY()-loc[1];
+                    float half=board.getTile()*0.58f;
+                    float left=board.getOriginX()-half, right=board.getOriginX()+board.getTile()*8f+half;
+                    float top=board.getOriginY()-half, bottom=board.getOriginY()+board.getTile()*9f+half;
+                    if(bx<left||bx>right||by<top||by>bottom){
+                        if(listener!=null)listener.onPieceDroppedOutside(this,e.getRawX(),e.getRawY());
+                        glide(downRow,downCol,null);
+                        return true;
+                    }
                     int tc=clamp(Math.round((cx-board.getOriginX())/board.getTile()),0,8);
                     int tr=clamp(Math.round((cy-board.getOriginY())/board.getTile()),0,9);
                     if(tr==downRow&&tc==downCol)glide(downRow,downCol,null);else if(listener!=null)listener.onPieceDropped(this,downRow,downCol,tr,tc);else glide(tr,tc,null);
