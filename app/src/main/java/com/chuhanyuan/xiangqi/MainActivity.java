@@ -271,6 +271,8 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         board.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, android.view.MotionEvent e) {
+                // DOWN 必须先返回 true 抢占手势；否则该视图收不到后续的 UP
+                if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) return true;
                 if (e.getActionMasked() != android.view.MotionEvent.ACTION_UP) return false;
                 if (inputBlocked()) return true;
 
