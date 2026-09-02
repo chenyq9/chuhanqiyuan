@@ -15,6 +15,7 @@ public class PieceView extends AppCompatTextView {
 
     public interface OnPieceMoved {
         void onPieceDropped(PieceView pv, int fromRow, int fromCol, int toRow, int toCol);
+        void onPieceTapped(PieceView pv);
     }
 
     public final boolean isRed;
@@ -26,7 +27,7 @@ public class PieceView extends AppCompatTextView {
     private int row, col;
     private int downRow, downCol;
     private float startX, startY, lastRX, lastRY;
-    private boolean dragging, moved;
+    private boolean dragging, moved, selected;
     private int colStroke, colGold;
 
     public PieceView(Context c, BoardView board, GameLogic game, char kind, boolean isRed, OnPieceMoved listener) {
@@ -59,9 +60,9 @@ public class PieceView extends AppCompatTextView {
         GradientDrawable g = new GradientDrawable();
         g.setShape(GradientDrawable.OVAL);
         g.setColor(ContextCompat.getColor(getContext(), R.color.piece_face));
-        g.setStroke(dp(dragging ? 3 : 2), dragging ? colGold : colStroke);
+        g.setStroke(dp(dragging || selected ? 3 : 2), dragging || selected ? colGold : colStroke);
         setBackground(g);
-        setElevation(dp(dragging ? 10 : 4));
+        setElevation(dp(dragging ? 10 : selected ? 6 : 4));
     }
 
     public void setSize(float tile) {
@@ -99,6 +100,11 @@ public class PieceView extends AppCompatTextView {
     public void setCell(int r, int c) {
         row = r;
         col = c;
+    }
+
+    public void setSelected(boolean s) {
+        selected = s;
+        updateBg();
     }
 
     private boolean touch(MotionEvent e) {
@@ -146,6 +152,9 @@ public class PieceView extends AppCompatTextView {
                         glide(tr, tc, null);
                     }
                 } else {
+                    if (e.getActionMasked() == MotionEvent.ACTION_UP && listener != null) {
+                        listener.onPieceTapped(PieceView.this); // 原地点按=选中/吃子
+                    }
                     glide(downRow, downCol, null);
                 }
                 return true;

@@ -43,6 +43,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     private final Map<String, Integer> aiTrophies = new HashMap<>();
     private final Map<String, Integer> myTrophies = new HashMap<>();
     private Runnable pendingAiTurn;
+    private PieceView selectedPiece;
     private final Runnable bubbleHider = new Runnable() {
         @Override
         public void run() {
@@ -69,6 +70,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         capturedScroll = findViewById(R.id.capturedScroll);
         etInput = findViewById(R.id.etInput);
         sp = getSharedPreferences("chuhan", MODE_PRIVATE);
+        setupBoardTap();
         setupSounds();
         setupButtons();
         newGame();
@@ -147,6 +149,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         });
         if (ai != null) ai.resetHistory();
         if (pendingAiTurn != null) ui.removeCallbacks(pendingAiTurn);
+        selectedPiece = null;
         aiBusy = false;
     }
 
@@ -188,8 +191,67 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         }).start();
     }
 
+    /** 空格点按：有选中子就走过去。 */
+    private void setupBoardTap() {
+        board.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, android.view.MotionEvent e) {
+                if (e.getActionMasked() != android.view.MotionEvent.ACTION_UP) return false;
+                if (selectedPiece == null) return false;
+                int c = Math.round((e.getX() - board.getOriginX()) / board.getTile());
+                int r = Math.round((e.getY() - board.getOriginY()) / board.getTile());
+                if (r < 0 || r > 9 || c < 0 || c > 8) return false;
+                if (game.pieceAt(r, c) != 0) return false; // 有子的格由棋子自己处理
+                final PieceView from = selectedPiece;
+                from.setSelected(false);
+                selectedPiece = null;
+                int fr = from.getRow(), fc = from.getCol();
+                if (fr == r && fc == c) return true;
+                game.move(fr, fc, r, c);
+                from.glide(r, c, null);
+                playSnd(sndMove);
+                maybeTriggerAi();
+                return true;
+            }
+        });
+    }
+
+    @Override
+    public void onPieceTapped(PieceView pv) {
+        if (selectedPiece == pv) { // 再点一下=取消选中
+            pv.setSelected(false);
+            selectedPiece = null;
+            return;
+        }
+        if (selectedPiece != null) { // 已有选中：点别的子=走过去（点对方=吃）
+            final PieceView from = selectedPiece;
+            from.setSelected(false);
+            selectedPiece = null;
+            int fr = from.getRow(), fc = from.getCol(), tr = pv.getRow(), tc = pv.getCol();
+            if (fr == tr && fc == tc) return;
+            boolean wasCapture = game.pieceAt(tr, tc) != 0;
+            game.move(fr, fc, tr, tc);
+            from.glide(tr, tc, null);
+            if (wasCapture) {
+                movePieceToTrophy(pv, !from.isRed);
+                playSnd(sndCapture);
+                showBubble("系统", "吃！");
+            } else {
+                playSnd(sndMove);
+            }
+            maybeTriggerAi();
+            return;
+        }
+        selectedPiece = pv; // 选中
+        pv.setSelected(true);
+    }
+
     @Override
     public void onPieceDropped(PieceView pv, int fr, int fc, int tr, int tc) {
+        if (selectedPiece != null) {
+            selectedPiece.setSelected(false);
+            selectedPiece = null;
+        }
         boolean wasCapture = game.pieceAt(tr, tc) != 0;
         game.move(fr, fc, tr, tc);
         pv.glide(tr, tc, null);
