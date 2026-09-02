@@ -12,8 +12,9 @@ public class BoardView extends FrameLayout {
 
     public interface GeometryListener { void onGeometryChanged(); }
     private GeometryListener geometryListener;
-    private Paint line, fill, river, text;
+    private Paint line, fill, river, text, aiMoveMark;
     private float tile = 0f, originX = 0f, originY = 0f, boardW = 0f, boardH = 0f;
+    private int aiFromRow = -1, aiFromCol = -1, aiToRow = -1, aiToCol = -1;
 
     public BoardView(Context c) { super(c); init(); }
     public BoardView(Context c, AttributeSet a) { super(c, a); init(); }
@@ -38,6 +39,11 @@ public class BoardView extends FrameLayout {
         text = new Paint(Paint.ANTI_ALIAS_FLAG);
         text.setColor(color(R.color.board_line));
         text.setStyle(Paint.Style.FILL);
+        aiMoveMark = new Paint(Paint.ANTI_ALIAS_FLAG);
+        aiMoveMark.setColor(color(R.color.gold_accent));
+        aiMoveMark.setStyle(Paint.Style.STROKE);
+        aiMoveMark.setStrokeWidth(dp(3f));
+        aiMoveMark.setStrokeCap(Paint.Cap.ROUND);
     }
 
     private int color(int id) { return androidx.core.content.ContextCompat.getColor(getContext(), id); }
@@ -65,6 +71,46 @@ public class BoardView extends FrameLayout {
     public float getOriginY() { return originY; }
     public float x(int col) { return originX + col * tile; }
     public float y(int row) { return originY + row * tile; }
+
+    public void setAiMoveMarker(int fromRow, int fromCol, int toRow, int toCol) {
+        aiFromRow = fromRow; aiFromCol = fromCol; aiToRow = toRow; aiToCol = toCol;
+        invalidate();
+    }
+
+    public void clearAiMoveMarker() {
+        aiFromRow = aiFromCol = aiToRow = aiToCol = -1;
+        invalidate();
+    }
+
+    private void drawAiMoveMarker(Canvas cv) {
+        if (aiFromRow < 0 || aiToRow < 0 || tile <= 0) return;
+        float fx = x(aiFromCol), fy = y(aiFromRow);
+        float tx = x(aiToCol), ty = y(aiToRow);
+
+        aiMoveMark.setAlpha(185);
+        aiMoveMark.setStrokeWidth(dp(3f));
+        cv.drawCircle(fx, fy, tile * 0.34f, aiMoveMark);
+
+        // 用虚线式短段连接起点和终点，让用户一眼知道 AI 是从哪里拿到哪里。
+        aiMoveMark.setAlpha(115);
+        aiMoveMark.setStrokeWidth(dp(2f));
+        float dx = tx - fx, dy = ty - fy;
+        float len = (float)Math.hypot(dx, dy);
+        if (len > tile * 0.25f) {
+            float ux = dx / len, uy = dy / len;
+            float start = tile * 0.42f, end = Math.max(start, len - tile * 0.48f);
+            float dash = tile * 0.16f, gap = tile * 0.11f;
+            for (float d = start; d < end; d += dash + gap) {
+                float d2 = Math.min(d + dash, end);
+                cv.drawLine(fx + ux*d, fy + uy*d, fx + ux*d2, fy + uy*d2, aiMoveMark);
+            }
+            // 小箭头指向终点。
+            aiMoveMark.setAlpha(185);
+            float side = tile * 0.13f;
+            cv.drawLine(tx, ty, tx - ux*tile*0.28f + uy*side, ty - uy*tile*0.28f - ux*side, aiMoveMark);
+            cv.drawLine(tx, ty, tx - ux*tile*0.28f - uy*side, ty - uy*tile*0.28f + ux*side, aiMoveMark);
+        }
+    }
 
     /** 标记只出现在传统炮位与兵卒位，不在九宫上层两个角落重复画。 */
     private void mark(Canvas cv, int col, int row) {
@@ -107,6 +153,9 @@ public class BoardView extends FrameLayout {
 
         // 只保留四个初始炮位的夹线记号。这样九宫格上方两个角不会再出现多余的双线。
         mark(cv,1,2); mark(cv,7,2); mark(cv,1,7); mark(cv,7,7);
+
+        // AI 最近一步的起点 + 终点标记放在线条之上、棋子之下，方便看清它从哪里拿起。
+        drawAiMoveMarker(cv);
 
         int alpha=text.getAlpha();
         text.setTextAlign(Paint.Align.CENTER);
