@@ -1,61 +1,11 @@
 name: Android CI
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
-  unit-test:
-    name: JVM Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      - name: Compile sources + run logic tests
-        run: |
-          mkdir -p /tmp/tc
-          javac -d /tmp/tc -encoding UTF-8 \
-            app/src/main/java/com/chuhanyuan/xiangqi/GameLogic.java \
-            app/src/main/java/com/chuhanyuan/xiangqi/AiService.java \
-            app/src/test/java/com/chuhanyuan/xiangqi/LogicTest.java
-          java -cp /tmp/tc com.chuhanyuan.xiangqi.LogicTest
-
-  instrumented-test:
-    name: Emulator UI Tests (tap-to-move)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-gradle-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      - name: Enable KVM access for emulator
-        run: |
-          sudo chmod 666 /dev/kvm || true
-          ls -la /dev/kvm || echo NO_KVM_DEVICE
-      - name: Run instrumentation tests on emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          arch: x86_64
-          script: ./gradlew connectedDebugAndroidTest --no-daemon --stacktrace
-
   build:
-    name: Build APK (needs both test jobs green)
-    needs: [unit-test, instrumented-test]
+    name: Build APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

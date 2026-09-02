@@ -75,6 +75,13 @@ public class LogicTest {
         String r4 = "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"你这步妙啊\"}}]}";
         check("纯聊天无move", AiService.firstMove(r4) == null);
         check("纯聊天取content", "你这步妙啊".equals(AiService.content(r4)));
+        String r5 = "{\"choices\":[{\"message\":{\"tool_calls\":[{\"function\":{\"name\":\"move_friend_piece\",\"arguments\":{\"from\":\"a6\",\"to\":\"e4\",\"say\":\"我帮你走\"}}}]}}]}";
+        AiService.Move m5 = AiService.firstMove(r5);
+        check("帮朋友走工具解析", m5 != null && "move_friend_piece".equals(m5.action) && "a6".equals(m5.from) && "e4".equals(m5.to));
+
+        String r6 = "{\"choices\":[{\"message\":{\"tool_calls\":[{\"function\":{\"name\":\"return_captured_piece\",\"arguments\":{\"capturedSide\":\"black\",\"piece\":\"卒\",\"occurrence\":2,\"to\":\"e4\",\"say\":\"复活一下\"}}}]}}]}";
+        AiService.Move m6 = AiService.firstMove(r6);
+        check("战利品返还工具解析", m6 != null && "return_captured_piece".equals(m6.action) && m6.capturedSide.equals("black") && m6.pieceKind == '卒' && m6.occurrence == 2 && "e4".equals(m6.to));
 
         // 空盘摆子：初始规格无撞格
         String[] specs = GameLogic.initialSpecs();

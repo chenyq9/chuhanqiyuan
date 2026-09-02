@@ -9,14 +9,20 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowInsets;
+import android.view.MotionEvent;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.Toast;
+import android.app.AlertDialog;
+import android.widget.ScrollView;
 import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
@@ -25,597 +31,320 @@ import java.util.List;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity implements PieceView.OnPieceMoved {
-
     private BoardView board;
-    private GameLogic game = new GameLogic();
-    private final Handler ui = new Handler(Looper.getMainLooper());
-    private final List<PieceView> pieces = new ArrayList<>();
-    private final List<PieceView> capturedRed = new ArrayList<>();
-    private final List<PieceView> capturedBlack = new ArrayList<>();
-    private TextView tvBubble;
-    private LinearLayout capturedArea;
-    private HorizontalScrollView capturedScroll;
-    private LinearLayout capturedTopArea;
-    private HorizontalScrollView capturedTopScroll;
-    private final Map<PieceView, TextView> trophyChips = new HashMap<>();
-    private PieceView selectedTrophy;
+    private GameLogic game=new GameLogic();
+    private final Handler ui=new Handler(Looper.getMainLooper());
+    private final List<PieceView> pieces=new ArrayList<>();
+    private final List<PieceView> capturedRed=new ArrayList<>(); // 被黑吃掉的红子
+    private final List<PieceView> capturedBlack=new ArrayList<>(); // 被红吃掉的黑子
+    private TextView tvBubble,tvEat,tvTurnStatus,tvChat;
+    private LinearLayout capturedArea,capturedTopArea,bottomPanel;
+    private HorizontalScrollView capturedScroll,capturedTopScroll;
+    private final Map<PieceView,TextView> trophyChips=new HashMap<>();
+    private final List<String> chatLines=new ArrayList<>();
+    private PieceView selectedTrophy,selectedPiece,lastAiPiece;
+    private TextView dragGhost;
     private EditText etInput;
     private SharedPreferences sp;
     private AiService ai;
     private SoundPool sounds;
-    private int sndMove = 0, sndCapture = 0;
-    private boolean aiBusy = false;
-    private boolean moveAnimating = false;
-    private int aiInvalidAttempts = 0;
-    private final Map<String, Integer> aiTrophies = new HashMap<>();
-    private final Map<String, Integer> myTrophies = new HashMap<>();
+    private int sndMove=0,sndCapture=0;
+    private boolean aiBusy=false,moveAnimating=false;
+    private int aiInvalidAttempts=0;
     private Runnable pendingAiTurn;
-    private PieceView selectedPiece;
-    private final Runnable bubbleHider = new Runnable() {
-        @Override
-        public void run() {
-            tvBubble.animate().alpha(0f).setDuration(500).withEndAction(new Runnable() {
-                @Override
-                public void run() {
-                    tvBubble.setVisibility(View.GONE);
-                }
+    private final Runnable bubbleHider=()->{ if(tvBubble==null)return; tvBubble.animate().alpha(0f).setDuration(450).withEndAction(()->tvBubble.setVisibility(View.GONE)); };
+
+    private int dp(float v){return (int)(v*getResources().getDisplayMetrics().density+0.5f);}
+
+    @Override protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);setContentView(R.layout.activity_main);
+        board=findViewById(R.id.boardView);tvBubble=findViewById(R.id.tvBubble);tvEat=findViewById(R.id.tvEat);
+        tvTurnStatus=findViewById(R.id.tvTurnStatus);tvChat=findViewById(R.id.tvChat);bottomPanel=findViewById(R.id.bottomPanel);
+        capturedArea=findViewById(R.id.capturedArea);capturedScroll=findViewById(R.id.capturedScroll);
+        capturedTopArea=findViewById(R.id.capturedTopArea);capturedTopScroll=findViewById(R.id.capturedTopScroll);etInput=findViewById(R.id.etInput);
+        sp=getSharedPreferences("chuhan",MODE_PRIVATE);
+        setupKeyboardBehavior();setupBoardTap();
+        board.setGeometryListener(()->relayoutAll());setupSounds();setupButtons();newGame();
+    }
+
+    private void setupKeyboardBehavior(){
+        // 键盘弹起时不重新布局棋盘，只把底部聊天/输入区抬上去。
+        final View root=findViewById(R.id.rootContainer);
+        root.setOnApplyWindowInsetsListener((v,insets)->{
+            int ime=0;
+            if(android.os.Build.VERSION.SDK_INT>=30) ime=insets.getInsets(WindowInsets.Type.ime()).bottom;
+            if(ime>0) bottomPanel.setTranslationY(-ime); else if(android.os.Build.VERSION.SDK_INT>=30) bottomPanel.setTranslationY(0);
+            return insets;
+        });
+        // Android 7~10 没有 Type.ime，用可见区域检测键盘高度。
+        if(android.os.Build.VERSION.SDK_INT<30){
+            root.getViewTreeObserver().addOnGlobalLayoutListener(()->{
+                android.graphics.Rect rect=new android.graphics.Rect();root.getWindowVisibleDisplayFrame(rect);
+                int diff=root.getRootView().getHeight()-rect.bottom;
+                int keyboard=diff>dp(80)?diff:0;
+                bottomPanel.setTranslationY(-keyboard);
             });
         }
-    };
-
-    private int dp(float v) {
-        return (int) (v * getResources().getDisplayMetrics().density);
+        root.requestApplyInsets();
     }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        board = findViewById(R.id.boardView);
-        tvBubble = findViewById(R.id.tvBubble);
-        capturedArea = findViewById(R.id.capturedArea);
-        capturedScroll = findViewById(R.id.capturedScroll);
-        capturedTopArea = findViewById(R.id.capturedTopArea);
-        capturedTopScroll = findViewById(R.id.capturedTopScroll);
-        etInput = findViewById(R.id.etInput);
-        sp = getSharedPreferences("chuhan", MODE_PRIVATE);
-        setupBoardTap();
-        board.setGeometryListener(new BoardView.GeometryListener() {
-            @Override
-            public void onGeometryChanged() {
-                relayoutAll();
-            }
-        });
-        setupSounds();
-        setupButtons();
-        newGame();
+    private void setupSounds(){
+        try{
+            AudioAttributes attrs=new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+            sounds=new SoundPool.Builder().setMaxStreams(3).setAudioAttributes(attrs).build();sndMove=sounds.load(this,R.raw.move,1);sndCapture=sounds.load(this,R.raw.capture,1);
+        }catch(Exception e){sounds=null;}
     }
 
-    private void setupSounds() {
-        try {
-            AudioAttributes attrs = new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_GAME)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build();
-            sounds = new SoundPool.Builder().setMaxStreams(3).setAudioAttributes(attrs).build();
-            sndMove = sounds.load(this, R.raw.move, 1);
-            sndCapture = sounds.load(this, R.raw.capture, 1);
-        } catch (Exception e) {
-            sounds = null;
-        }
-    }
-
-    private void setupButtons() {
-        ImageView btnNew = findViewById(R.id.btnNew);
-        ImageView btnCfg = findViewById(R.id.btnCfg);
-        btnNew.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                newGame();
-            }
-        });
-        btnCfg.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
-            }
-        });
-        Button send = findViewById(R.id.btnSend);
-        send.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String text = etInput.getText().toString().trim();
-                if (!text.isEmpty()) {
-                    etInput.setText("");
-                    showBubble("你", text);
-                    requestAi("【棋友说】" + text);
-                }
-            }
+    private void setupButtons(){
+        ImageView btnNew=findViewById(R.id.btnNew),btnCfg=findViewById(R.id.btnCfg),btnChatLog=findViewById(R.id.btnChatLog);
+        btnNew.setOnClickListener(v->newGame());
+        btnChatLog.setOnClickListener(v->showChatLog());
+        btnCfg.setOnClickListener(v->startActivity(new Intent(MainActivity.this,SettingsActivity.class)));
+        Button send=findViewById(R.id.btnSend);
+        send.setOnClickListener(v->{
+            String text=etInput.getText().toString().trim();if(text.isEmpty())return;
+            etInput.setText("");addChat("你",text);showBubble("你",text);requestAi("【棋友说】"+text);
         });
     }
 
-    private void newGame() {
-        game.reset();
-        boolean fresh = pieces.isEmpty();
-        if (fresh) {
-            for (String spec : GameLogic.initialSpecs()) {
-                String[] p = spec.split(",");
-                char kind = p[0].charAt(0);
-                boolean red = GameLogic.isRedPiece(kind);
-                PieceView pv = new PieceView(this, board, game, kind, red, this);
-                pv.setSize(board.getTile());
-                pv.setHome(Integer.parseInt(p[1]), Integer.parseInt(p[2]));
-                board.addView(pv);
-                pieces.add(pv);
-                pv.setCell(Integer.parseInt(p[1]), Integer.parseInt(p[2]));
+    private void newGame(){
+        game.reset();boolean fresh=pieces.isEmpty();
+        if(fresh){
+            for(String spec:GameLogic.initialSpecs()){
+                String[] p=spec.split(",");char kind=p[0].charAt(0);boolean red=GameLogic.isRedPiece(kind);
+                PieceView pv=new PieceView(this,board,game,kind,red,this);pv.setSize(board.getTile());pv.setHome(Integer.parseInt(p[1]),Integer.parseInt(p[2]));board.addView(pv);pieces.add(pv);pv.setCell(Integer.parseInt(p[1]),Integer.parseInt(p[2]));
             }
-        } else {
-            // 战利品区的子回归在盘列表，视图不销毁
-            pieces.addAll(capturedBlack);
-            pieces.addAll(capturedRed);
-        }
-        capturedRed.clear();
-        capturedBlack.clear();
-        myTrophies.clear();
-        aiTrophies.clear();
-        capturedArea.removeAllViews();
-        capturedTopArea.removeAllViews();
-        trophyChips.clear();
-        selectedPiece = null;
-        selectedTrophy = null;
-        if (!fresh) {
-            // 推倒重摆：所有子（含被吃的）一起飞回初始位
-            for (PieceView pv : pieces) {
-                pv.setEnabled(true);
-                pv.setVisibility(View.VISIBLE);
-                pv.flyHome(pv.getHomeRow(), pv.getHomeCol());
-            }
-        } else {
-            board.post(new Runnable() {
-                @Override
-                public void run() {
-                    relayoutAll();
-                }
-            });
-        }
-        if (ai != null) ai.resetHistory();
-        if (pendingAiTurn != null) ui.removeCallbacks(pendingAiTurn);
-        aiBusy = false;
-        moveAnimating = false;
-        aiInvalidAttempts = 0;
+        }else pieces.addAll(capturedBlack); // 顺便下面再加入capturedRed
+        if(!fresh){pieces.addAll(capturedRed);}
+        for(PieceView pv:pieces){pv.setLastMoveHighlighted(false);pv.setEnabled(true);pv.setVisibility(View.VISIBLE);}
+        capturedRed.clear();capturedBlack.clear();capturedArea.removeAllViews();capturedTopArea.removeAllViews();trophyChips.clear();
+        selectedPiece=null;selectedTrophy=null;clearLastAiMove();aiInvalidAttempts=0;moveAnimating=false;aiBusy=false;
+        clearChat();updateTurnStatus();
+        if(!fresh)for(PieceView pv:pieces)pv.flyHome(pv.getHomeRow(),pv.getHomeCol()); else board.post(this::relayoutAll);
+        if(ai!=null)ai.resetHistory();if(pendingAiTurn!=null)ui.removeCallbacks(pendingAiTurn);
+        showBubble("系统","新局开始");
     }
 
-    /** 棋盘几何变化/首建：重设尺寸并归位所有棋子。 */
-    private void relayoutAll() {
-        float t = board.getTile();
-        if (t <= 0) return;
-        for (PieceView pv : pieces) {
-            pv.setSize(t);
-            pv.place(pv.getRow(), pv.getCol());
-        }
-        relayoutTrophies(capturedBlack, true);
-        relayoutTrophies(capturedRed, false);
-    }
+    private void relayoutAll(){float t=board.getTile();if(t<=0)return;for(PieceView pv:pieces){pv.setSize(t);pv.place(pv.getRow(),pv.getCol());}relayoutTrophies(capturedBlack,true);relayoutTrophies(capturedRed,false);}
+    private void relayoutTrophies(List<PieceView> side,boolean playerSide){for(PieceView pv:side){TextView chip=trophyChips.get(pv);if(chip!=null)chip.setText(String.valueOf(pv.kind));}}
 
-    private void relayoutTrophies(java.util.List<PieceView> side, boolean playerSide) {
-        LinearLayout area = playerSide ? capturedArea : capturedTopArea;
-        if (area == null) return;
-        // 战利品由独立 chip 承载显示，真实 PieceView 隐藏在棋盘容器中。
-        // 几何变化只需刷新 chip 尺寸/布局，不再把被吃棋子当作棋盘棋子定位。
-        for (PieceView pv : side) {
-            TextView chip = trophyChips.get(pv);
-            if (chip != null) chip.setText(String.valueOf(pv.kind));
-        }
+    private void updateTurnStatus(){
+        if(aiBusy)tvTurnStatus.setText("● 对方正在思考…"); else tvTurnStatus.setText("● 轮到你");
     }
+    private void addChat(String who,String text){
+        if(text==null||text.trim().isEmpty())return;
+        chatLines.add(who+"："+text.trim());
+        while(chatLines.size()>200)chatLines.remove(0);
+        StringBuilder sb=new StringBuilder();
+        int start=Math.max(0,chatLines.size()-5);
+        for(int i=start;i<chatLines.size();i++){if(sb.length()>0)sb.append('\n');sb.append(chatLines.get(i));}
+        tvChat.setText(sb.toString());
+    }
+    private void clearChat(){chatLines.clear();tvChat.setText("");}
 
-    private void requestAi(String prompt) {
-        if (aiBusy) {
-            Toast.makeText(this, "对方还在想…", Toast.LENGTH_SHORT).show();
+    /** 查看本局完整聊天记录；底部只显示最近几条，避免遮挡棋盘。 */
+    private void showChatLog(){
+        if(chatLines.isEmpty()){
+            Toast.makeText(this,"本局还没有聊天记录",Toast.LENGTH_SHORT).show();
             return;
         }
-        if (ai == null) {
-            ai = new AiService(sp.getString("base", ""), sp.getString("key", ""), sp.getString("model", ""));
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18),dp(4),dp(18),dp(4));
+        ScrollView scroll=new ScrollView(this);
+        TextView text=new TextView(this);
+        text.setTextSize(15);
+        text.setTextColor(getResources().getColor(R.color.board_line));
+        text.setText(String.join("\n\n",chatLines));
+        text.setPadding(0,dp(8),0,dp(12));
+        scroll.addView(text,new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        box.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(420)));
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("本局聊天记录")
+                .setView(box)
+                .setPositiveButton("关闭",null)
+                .create();
+        dialog.setOnShowListener(d->scroll.post(()->scroll.fullScroll(View.FOCUS_DOWN)));
+        dialog.show();
+    }
+
+    private String boardContext(){
+        StringBuilder sb=new StringBuilder(game.boardText());
+        sb.append("\n当前战利品区（已经被吃、离开棋盘的棋子）：\n");
+        appendCaptured(sb,"红棋（被黑吃）",capturedRed);appendCaptured(sb,"黑棋（被红吃）",capturedBlack);
+        return sb.toString();
+    }
+    private void appendCaptured(StringBuilder sb,String title,List<PieceView> list){
+        sb.append(title).append("方战利品：");
+        if(list.isEmpty()){sb.append("无\n");return;}
+        for(int i=0;i<list.size();i++){if(i>0)sb.append("、");sb.append(i+1).append("号").append(list.get(i).kind);}
+        sb.append("\n");
+    }
+
+    private void requestAi(String prompt){
+        if(aiBusy){Toast.makeText(this,"对方还在想…",Toast.LENGTH_SHORT).show();return;}
+        if(ai==null)ai=new AiService(sp.getString("base",""),sp.getString("key",""),sp.getString("model",""));
+        aiBusy=true;updateTurnStatus();
+        runAiTurn(prompt+"\n\n"+boardContext());
+    }
+
+    private boolean inputBlocked(){return aiBusy||moveAnimating;}
+    private void lockMoveAnimation(long ms){moveAnimating=true;ui.postDelayed(()->{moveAnimating=false;},ms);}
+    private void clearLastAiMove(){if(lastAiPiece!=null){lastAiPiece.setLastMoveHighlighted(false);lastAiPiece=null;}}
+    private void markAiPiece(PieceView pv){clearLastAiMove();lastAiPiece=pv;pv.setLastMoveHighlighted(true);pv.startLastMovePulse();}
+
+    private void retryAi(String reason){
+        if(aiInvalidAttempts>=2){aiBusy=false;updateTurnStatus();showBubble("AI",reason);addChat("AI",reason);return;}
+        aiInvalidAttempts++;requestAi("【系统】"+reason+"\n请重新读取刚才的棋盘。不要猜坐标，只做一次符合现场情况的物理操作。\n"+boardContext());
+    }
+
+    private void runAiTurn(final String prompt){
+        new Thread(()->{try{final String resp=ai.chat(prompt);ui.post(()->{aiBusy=false;updateTurnStatus();handleResponse(resp);});}catch(final Exception e){ui.post(()->{aiBusy=false;updateTurnStatus();String msg="连接失败："+(e.getMessage()==null?"未知错误":e.getMessage());showBubble("系统",msg);addChat("系统",msg);});}}).start();
+    }
+
+    private void setupBoardTap(){
+        board.setOnTouchListener((v,e)->{
+            if(e.getActionMasked()==MotionEvent.ACTION_DOWN)return true;
+            if(e.getActionMasked()!=MotionEvent.ACTION_UP)return true;
+            if(inputBlocked())return true;
+            int c=Math.round((e.getX()-board.getOriginX())/board.getTile()),r=Math.round((e.getY()-board.getOriginY())/board.getTile());
+            if(r<0||r>9||c<0||c>8)return true;
+            if(selectedTrophy!=null){if(game.pieceAt(r,c)!=0){Toast.makeText(this,"这个位置已经有棋子",Toast.LENGTH_SHORT).show();return true;}returnTrophyToCell(selectedTrophy,r,c);return true;}
+            if(selectedPiece==null)return true;
+            if(game.pieceAt(r,c)!=0)return true;
+            PieceView from=selectedPiece;int fr=from.getRow(),fc=from.getCol();if(fr==r&&fc==c)return true;
+            clearLastAiMove();from.setSelected(false);selectedPiece=null;game.move(fr,fc,r,c);from.glide(r,c,null);playSnd(sndMove);lockMoveAnimation(180);maybeTriggerAi();return true;
+        });
+    }
+
+    @Override public void onPieceTapped(PieceView pv){
+        if(!pv.isEnabled()||inputBlocked())return;
+        if(selectedTrophy!=null){clearTrophySelection();}
+        if(selectedPiece==pv){pv.setSelected(false);selectedPiece=null;return;}
+        if(selectedPiece!=null&&pv.isRed==selectedPiece.isRed){selectedPiece.setSelected(false);selectedPiece=pv;pv.setSelected(true);return;}
+        if(selectedPiece!=null){
+            PieceView from=selectedPiece;int fr=from.getRow(),fc=from.getCol(),tr=pv.getRow(),tc=pv.getCol();
+            clearLastAiMove();from.setSelected(false);selectedPiece=null;game.move(fr,fc,tr,tc);from.glide(tr,tc,null);
+            movePieceToTrophy(pv,from.isRed);playSnd(sndCapture);showEatEffect();addChat("系统","吃！");lockMoveAnimation(180);maybeTriggerAi();return;
         }
-        aiBusy = true;
-        runAiTurn(prompt + "\n\n" + game.boardText());
+        selectedPiece=pv;pv.setSelected(true);
     }
 
-    private boolean inputBlocked() {
-        return aiBusy || moveAnimating;
+    @Override public void onPieceDropped(PieceView pv,int fr,int fc,int tr,int tc){
+        if(inputBlocked()){pv.glide(fr,fc,null);return;}
+        if(selectedPiece!=null){selectedPiece.setSelected(false);selectedPiece=null;}
+        PieceView victim=findPieceAt(tr,tc,pv);
+        if(victim!=null&&victim.isRed==pv.isRed){pv.glide(fr,fc,null);return;}
+        clearLastAiMove();boolean wasCapture=victim!=null;game.move(fr,fc,tr,tc);pv.glide(tr,tc,null);
+        if(wasCapture){movePieceToTrophy(victim,pv.isRed);playSnd(sndCapture);showEatEffect();addChat("系统","吃！");}else playSnd(sndMove);
+        lockMoveAnimation(180);maybeTriggerAi();
     }
 
-    private void lockMoveAnimation(long ms) {
-        moveAnimating = true;
-        ui.postDelayed(new Runnable() {
-            @Override public void run() { moveAnimating = false; }
-        }, ms);
+    private PieceView findPieceAt(int r,int c,PieceView exclude){for(PieceView pv:pieces)if(pv!=exclude&&pv.getRow()==r&&pv.getCol()==c&&pv.isEnabled())return pv;return null;}
+
+    /** 谁吃子决定进哪边：红吃黑→下方，黑吃红→上方。 */
+    private void movePieceToTrophy(PieceView victim,boolean captureByRed){
+        pieces.remove(victim);(captureByRed?capturedBlack:capturedRed).add(victim);selectedTrophy=null;
+        victim.animate().cancel();victim.setLastMoveHighlighted(false);victim.setEnabled(false);victim.setVisibility(View.INVISIBLE);addTrophyChip(captureByRed,victim.kind,victim);
     }
 
-    private void retryAi(String reason) {
-        if (aiInvalidAttempts >= 2) {
-            showBubble("AI", reason);
-            return;
+    private void maybeTriggerAi(){
+        clearLastAiMove();aiInvalidAttempts=0;if(pendingAiTurn!=null)ui.removeCallbacks(pendingAiTurn);
+        pendingAiTurn=()->requestAi("【轮到你】请先看当前棋盘和战利品区，再像坐在对面的一位朋友一样行动。通常请调用 move_piece 走自己的红棋；如果朋友明确让你替他走，再调用 move_friend_piece；如果朋友明确让你把被吃棋子重新放回棋盘，再调用 return_captured_piece。一次只做一个实际动作。也可以顺便说一句话。\n\n"+boardContext());
+        ui.postDelayed(pendingAiTurn,550);
+    }
+
+    private void handleResponse(String resp){
+        AiService.Move m=AiService.firstMove(resp);String content=AiService.content(resp);
+        if(m==null){if(content!=null&&!content.isEmpty()){showBubble("AI",content);addChat("AI",content);}updateTurnStatus();return;}
+        if(m.say!=null&&!m.say.isEmpty()){showBubble("AI",m.say);addChat("AI",m.say);}else if(content!=null&&!content.isEmpty()){showBubble("AI",content);addChat("AI",content);}
+        switch(m.action){
+            case "move_piece": executeAiMove(m,true); break;
+            case "move_friend_piece": executeAiMove(m,false); break;
+            case "return_captured_piece": executeAiReturnCaptured(m); break;
+            default: retryAi("他说要做一个软件还不认识的动作："+m.action); break;
         }
-        aiInvalidAttempts++;
-        requestAi("【系统】" + reason + "\n请重新读取当前棋盘，只使用你自己的红棋，并重新调用 move_piece。 ");
     }
 
-    private void runAiTurn(final String prompt) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    final String resp = ai.chat(prompt);
-                    ui.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            aiBusy = false;
-                            handleResponse(resp);
-                        }
-                    });
-                } catch (final Exception e) {
-                    ui.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            aiBusy = false;
-                            showBubble("系统", "连接失败：" + e.getMessage());
-                        }
-                    });
-                }
-            }
-        }).start();
+    private void executeAiMove(AiService.Move m,boolean selfIsRed){
+        PieceView mover=findPieceAt(m.fr,m.fc,null);
+        if(mover==null){ai.noteToolMiss(m.from+m.to);retryAi("他从"+m.from+"拿了一个空位置。请重新看棋盘。");return;}
+        if(mover.isRed!=selfIsRed){ai.noteToolMiss(m.from+m.to);retryAi("他选错了棋子。这个工具对应的是"+(selfIsRed?"AI自己的红棋":"朋友的黑棋")+"。");return;}
+        if(m.tr<0||m.tr>9||m.tc<0||m.tc>8){ai.noteToolMiss(m.from+m.to);retryAi("目标"+m.to+"超出棋盘。");return;}
+        PieceView victim=findPieceAt(m.tr,m.tc,mover);
+        if(victim!=null&&victim.isRed==mover.isRed){ai.noteToolMiss(m.from+m.to);retryAi("目标"+m.to+"已经有自己这一方的棋子，现实棋盘放不下两颗。");return;}
+        game.move(m.fr,m.fc,m.tr,m.tc);moveAnimating=true;final boolean capture=victim!=null;
+        tvTurnStatus.setText("● 对方正在落子…");
+        mover.glideForAi(m.tr,m.tc,()->{moveAnimating=false;markAiPiece(mover);updateTurnStatus();});
+        playSnd(capture?sndCapture:sndMove);
+        if(capture){movePieceToTrophy(victim,mover.isRed);showEatEffect();addChat("系统","吃！");}
+        aiInvalidAttempts=0;
     }
 
-    /** 棋盘点按：先处理“从战利品取回”的落点，再处理普通选中棋子。 */
-    private void setupBoardTap() {
-        board.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, android.view.MotionEvent e) {
-                // DOWN 必须先返回 true 抢占手势；否则该视图收不到后续的 UP
-                if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) return true;
-                if (e.getActionMasked() != android.view.MotionEvent.ACTION_UP) return false;
-                if (inputBlocked()) return true;
+    private void executeAiReturnCaptured(AiService.Move m){
+        if(m.capturedSide==null||m.capturedSide.isEmpty()){retryAi("返还棋子工具缺少 capturedSide。");return;}
+        List<PieceView> list="red".equalsIgnoreCase(m.capturedSide)?capturedRed:capturedBlack;
+        PieceView victim=findNthCaptured(list,m.pieceKind,m.occurrence);
+        if(victim==null){retryAi("战利品区里没有他指定的那颗棋子。");return;}
+        if(game.pieceAt(m.tr,m.tc)!=0){retryAi("他想把战利品放到"+m.to+"，但那里已经有棋子。");return;}
+        removeTrophyChip(victim);list.remove(victim);game.put(m.tr,m.tc,victim.kind);pieces.add(victim);
+        victim.setEnabled(true);victim.setVisibility(View.VISIBLE);victim.restoreTo(m.tr,m.tc);playSnd(sndMove);markAiPiece(victim);addChat("系统","AI把被吃的"+victim.kind+"放回了"+m.to);
+        updateTurnStatus();
+    }
 
-                int c = Math.round((e.getX() - board.getOriginX()) / board.getTile());
-                int r = Math.round((e.getY() - board.getOriginY()) / board.getTile());
-                if (r < 0 || r > 9 || c < 0 || c > 8) return false;
+    private PieceView findNthCaptured(List<PieceView> list,char kind,int occurrence){int n=0;for(PieceView pv:list)if(kind==0||pv.kind==kind){n++;if(n==Math.max(1,occurrence))return pv;}return null;}
 
-                if (selectedTrophy != null) {
-                    if (game.pieceAt(r, c) != 0) {
-                        Toast.makeText(MainActivity.this, "这个落点已有棋子", Toast.LENGTH_SHORT).show();
+    private void showEatEffect(){
+        tvEat.animate().cancel();tvEat.setText("吃");tvEat.setVisibility(View.VISIBLE);tvEat.setAlpha(0f);tvEat.setScaleX(0.65f);tvEat.setScaleY(0.65f);
+        tvEat.animate().alpha(1f).scaleX(1.12f).scaleY(1.12f).setDuration(120).withEndAction(()->tvEat.animate().alpha(0f).scaleX(1.3f).scaleY(1.3f).setDuration(360).withEndAction(()->tvEat.setVisibility(View.GONE)).start()).start();
+    }
+    private void showBubble(String who,String text){tvBubble.setText(who+"："+text);tvBubble.animate().cancel();tvBubble.setAlpha(1f);tvBubble.setVisibility(View.VISIBLE);ui.removeCallbacks(bubbleHider);ui.postDelayed(bubbleHider,4000);}
+    private void playSnd(int id){if(sounds!=null&&id!=0)sounds.play(id,1f,1f,1,0,1f);}
+
+    private void addTrophyChip(boolean playerSide,char kind,final PieceView victim){
+        final TextView chip=new TextView(this);chip.setText(String.valueOf(kind));chip.setGravity(Gravity.CENTER);int side=dp(42);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(side,side);lp.setMargins(dp(3),dp(4),dp(3),dp(4));chip.setLayoutParams(lp);chip.setTextSize(18);chip.setTextColor(getResources().getColor(playerSide?R.color.black_piece:R.color.red_piece));chip.setBackgroundResource(R.drawable.bubble_bg);trophyChips.put(victim,chip);
+        chip.setOnTouchListener(new View.OnTouchListener(){float downX,downY;boolean moved;
+            @Override public boolean onTouch(View v,MotionEvent e){
+                switch(e.getActionMasked()){
+                    case MotionEvent.ACTION_DOWN:
+                        v.getParent().requestDisallowInterceptTouchEvent(true);downX=e.getRawX();downY=e.getRawY();moved=false;
+                        if(selectedTrophy!=null&&selectedTrophy!=victim)clearTrophySelection();selectedTrophy=victim;v.setSelected(true);return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float dx=e.getRawX()-downX,dy=e.getRawY()-downY;
+                        if(Math.abs(dx)>dp(6)||Math.abs(dy)>dp(6)){moved=true;if(dragGhost==null){startTrophyGhost(kind,playerSide,e.getRawX(),e.getRawY());v.setAlpha(0.15f);}else moveTrophyGhost(e.getRawX(),e.getRawY());}
                         return true;
-                    }
-                    returnTrophyToCell(selectedTrophy, r, c);
-                    return true;
-                }
-
-                if (selectedPiece == null) return false;
-                if (game.pieceAt(r, c) != 0) return false; // 有子的格由棋子自己处理
-                final PieceView from = selectedPiece;
-                from.setSelected(false);
-                selectedPiece = null;
-                int fr = from.getRow(), fc = from.getCol();
-                if (fr == r && fc == c) return true;
-                game.move(fr, fc, r, c);
-                from.glide(r, c, null);
-                playSnd(sndMove);
-                lockMoveAnimation(180);
-                maybeTriggerAi();
-                return true;
-            }
-        });
-    }
-
-    @Override
-    public void onPieceTapped(PieceView pv) {
-        if (!pv.isEnabled()) return; // 被吃后真实 PieceView 仅作状态对象，不直接参与点击
-        if (selectedTrophy != null) {
-            selectedTrophy = null;
-            return;
-        }
-        if (selectedPiece == pv) { // 再点一下=取消选中
-            pv.setSelected(false);
-            selectedPiece = null;
-            return;
-        }
-        if (selectedPiece != null && pv.isRed == selectedPiece.isRed) { // 点己方子=换选
-            selectedPiece.setSelected(false);
-            selectedPiece = pv;
-            pv.setSelected(true);
-            return;
-        }
-        if (selectedPiece != null) { // 点敌方子=吃过去
-            final PieceView from = selectedPiece;
-            from.setSelected(false);
-            selectedPiece = null;
-            int fr = from.getRow(), fc = from.getCol(), tr = pv.getRow(), tc = pv.getCol();
-            if (fr == tr && fc == tc) return;
-            boolean wasCapture = game.pieceAt(tr, tc) != 0;
-            game.move(fr, fc, tr, tc);
-            from.glide(tr, tc, null);
-            if (wasCapture) {
-                movePieceToTrophy(pv, from.isRed);
-                playSnd(sndCapture);
-                showBubble("系统", "吃！");
-            } else {
-                playSnd(sndMove);
-            }
-            lockMoveAnimation(180);
-            maybeTriggerAi();
-            return;
-        }
-        clearTrophySelection();
-        selectedPiece = pv; // 选中
-        pv.setSelected(true);
-    }
-
-    @Override
-    public void onPieceDropped(PieceView pv, int fr, int fc, int tr, int tc) {
-        if (inputBlocked()) {
-            pv.glide(fr, fc, null);
-            return;
-        }
-        if (selectedPiece != null) {
-            selectedPiece.setSelected(false);
-            selectedPiece = null;
-        }
-        PieceView victim = findPieceAt(tr, tc, pv);
-        if (victim != null && victim.isRed == pv.isRed) {
-            pv.glide(fr, fc, null); // 拖到己方子上：放不下，弹回
-            playSnd(sndMove);
-            return;
-        }
-        boolean wasCapture = victim != null;
-        game.move(fr, fc, tr, tc);
-        pv.glide(tr, tc, null);
-        if (wasCapture) {
-            movePieceToTrophy(victim, pv.isRed);
-            playSnd(sndCapture);
-            showBubble("系统", "吃！");
-        } else {
-            playSnd(sndMove);
-        }
-        lockMoveAnimation(180);
-        maybeTriggerAi();
-    }
-
-    private PieceView findPieceAt(int r, int c, PieceView exclude) {
-        for (PieceView pv : pieces) {
-            if (pv != exclude && pv.getRow() == r && pv.getCol() == c) return pv;
-        }
-        return null;
-    }
-
-    /** 把被吃的子放到吃子方对应的战利品区：红吃黑=下方，黑吃红=上方。 */
-    private void movePieceToTrophy(final PieceView victim, boolean captureByRed) {
-        pieces.remove(victim);
-        final java.util.List<PieceView> side = captureByRed ? capturedBlack : capturedRed;
-        side.add(victim);
-        selectedTrophy = null;
-
-        // 真正棋子留在 BoardView 中仅用于保存状态，但禁止继续响应棋盘点击。
-        victim.animate().cancel();
-        victim.setEnabled(false);
-        victim.setVisibility(View.INVISIBLE);
-        addTrophyChip(captureByRed, victim.kind, victim);
-    }
-
-    private void maybeTriggerAi() {
-        if (pendingAiTurn != null) ui.removeCallbacks(pendingAiTurn);
-        aiInvalidAttempts = 0;
-        pendingAiTurn = new Runnable() {
-            @Override
-            public void run() {
-                requestAi("【轮到你】棋盘如上。请走棋（调用 move_piece），也可以顺便说一句话。"
-                        + "记住：这是无规则棋盘。像真人下棋一样，你可以把自己的红棋放到任何棋盘格；终点若是朋友的黑棋，就是吃子。");
-            }
-        };
-        ui.postDelayed(pendingAiTurn, 400);
-    }
-
-    private void handleResponse(String resp) {
-        AiService.Move m = AiService.firstMove(resp);
-        String content = AiService.content(resp);
-        if (m != null) {
-            final PieceView mover = findPieceAt(m.fr, m.fc, null);
-            if (mover == null) {
-                ai.noteToolMiss(m.from + m.to);
-                retryAi("他上一手抓空了：" + m.from + " 上没有可移动的棋子。");
-                return;
-            }
-            if (!mover.isRed) {
-                ai.noteToolMiss(m.from + m.to);
-                retryAi("他上一手拿的是朋友的黑棋：" + m.from + "。像真人一样，AI 只能拿自己的棋子移动；如果想吃黑棋，应把自己的红棋移动到黑棋所在格。");
-                return;
-            }
-            if (m.tr < 0 || m.tr > 9 || m.tc < 0 || m.tc > 8) {
-                ai.noteToolMiss(m.from + m.to);
-                retryAi("他上一手目标坐标越界：" + m.to + "。");
-                return;
-            }
-            final char target = game.pieceAt(m.tr, m.tc);
-            if (target != 0 && GameLogic.isRedPiece(target)) {
-                ai.noteToolMiss(m.from + m.to);
-                retryAi("他上一手想把红棋放到已有红棋的格子：" + m.to + "。");
-                return;
-            }
-
-            final boolean isCapture = target != 0;
-            final PieceView victim = isCapture ? findPieceAt(m.tr, m.tc, mover) : null;
-            if (isCapture && victim == null) {
-                ai.noteToolMiss(m.from + m.to);
-                retryAi("棋盘数据和界面不同步：" + m.to + " 有棋子，但界面找不到对应棋子。");
-                return;
-            }
-            game.move(m.fr, m.fc, m.tr, m.tc);
-            moveAnimating = true;
-            mover.glideForAi(m.tr, m.tc, new Runnable() {
-                @Override
-                public void run() {
-                    moveAnimating = false;
-                    if (victim != null) movePieceToTrophy(victim, mover.isRed);
-                }
-            });
-            playSnd(isCapture ? sndCapture : sndMove);
-            if (m.say != null && !m.say.isEmpty()) {
-                showBubble("AI", m.say);
-            } else if (isCapture && (content == null || content.isEmpty())) {
-                showBubble("AI", "吃！");
-            } else if (content != null && !content.isEmpty()) {
-                showBubble("AI", content);
-            }
-        } else if (content != null && !content.isEmpty()) {
-            showBubble("AI", content);
-        }
-    }
-
-    private void showBubble(String who, String text) {
-        tvBubble.setText(who + "：" + text);
-        tvBubble.animate().cancel();
-        tvBubble.setAlpha(1f);
-        tvBubble.setVisibility(View.VISIBLE);
-        ui.removeCallbacks(bubbleHider);
-        ui.postDelayed(bubbleHider, 4000);
-    }
-
-    private void playSnd(int id) {
-        if (sounds != null && id != 0) sounds.play(id, 1f, 1f, 1, 0, 1f);
-    }
-
-    private void addTrophyChip(final boolean playerSide, char kind, final PieceView victim) {
-        final TextView chip = new TextView(this);
-        chip.setText(String.valueOf(kind));
-        chip.setGravity(Gravity.CENTER);
-        int side = dp(40);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(side, side);
-        lp.setMargins(dp(3), dp(4), dp(3), dp(4));
-        chip.setLayoutParams(lp);
-        chip.setTextSize(18);
-        chip.setTextColor(getResources().getColor(playerSide ? R.color.black_piece : R.color.red_piece));
-        chip.setBackgroundResource(R.drawable.bubble_bg);
-        trophyChips.put(victim, chip);
-
-        chip.setOnTouchListener(new View.OnTouchListener() {
-            float downX, downY;
-            float startTx, startTy;
-            boolean moved;
-
-            @Override
-            public boolean onTouch(View v, android.view.MotionEvent e) {
-                switch (e.getActionMasked()) {
-                    case android.view.MotionEvent.ACTION_DOWN:
-                        v.getParent().requestDisallowInterceptTouchEvent(true);
-                        downX = e.getRawX();
-                        downY = e.getRawY();
-                        startTx = v.getTranslationX();
-                        startTy = v.getTranslationY();
-                        moved = false;
-                        if (selectedTrophy != null && selectedTrophy != victim) clearTrophySelection();
-                        selectedTrophy = victim;
-                        v.setSelected(true);
-                        return true;
-
-                    case android.view.MotionEvent.ACTION_MOVE:
-                        float dx = e.getRawX() - downX;
-                        float dy = e.getRawY() - downY;
-                        if (Math.abs(dx) > dp(6) || Math.abs(dy) > dp(6)) moved = true;
-                        v.setTranslationX(startTx + dx);
-                        v.setTranslationY(startTy + dy);
-                        return true;
-
-                    case android.view.MotionEvent.ACTION_UP:
-                    case android.view.MotionEvent.ACTION_CANCEL:
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
                         v.getParent().requestDisallowInterceptTouchEvent(false);
-                        if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP && moved) {
-                            int[] loc = new int[2];
-                            board.getLocationOnScreen(loc);
-                            float px = e.getRawX() - loc[0];
-                            float py = e.getRawY() - loc[1];
-                            int tc = Math.round((px - board.getOriginX()) / board.getTile());
-                            int tr = Math.round((py - board.getOriginY()) / board.getTile());
-                            if (tr >= 0 && tr <= 9 && tc >= 0 && tc <= 8 && game.pieceAt(tr, tc) == 0) {
-                                returnTrophyToCell(victim, tr, tc);
-                            } else {
-                                v.animate().translationX(0).translationY(0).setDuration(120).start();
-                                chip.setSelected(true);
-                            }
-                        } else if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP) {
-                            selectedTrophy = victim;
-                            chip.setSelected(true);
-                        }
+                        if(e.getActionMasked()==MotionEvent.ACTION_UP&&moved){
+                            removeTrophyGhost();int[] loc=new int[2];board.getLocationOnScreen(loc);float px=e.getRawX()-loc[0],py=e.getRawY()-loc[1];
+                            int tc=Math.round((px-board.getOriginX())/board.getTile()),tr=Math.round((py-board.getOriginY())/board.getTile());
+                            if(tr>=0&&tr<=9&&tc>=0&&tc<=8&&game.pieceAt(tr,tc)==0)returnTrophyToCell(victim,tr,tc);else{chip.setAlpha(1f);chip.setSelected(true);}
+                        }else{removeTrophyGhost();chip.setAlpha(1f);chip.setSelected(true);}
                         return true;
-                }
-                return false;
+                }return false;
             }
         });
-
-        LinearLayout area = playerSide ? capturedArea : capturedTopArea;
-        area.addView(chip);
-        if (playerSide) {
-            capturedScroll.post(new Runnable() {
-                @Override public void run() {
-                    capturedScroll.fullScroll(HorizontalScrollView.FOCUS_RIGHT);
-                }
-            });
-        } else {
-            capturedTopScroll.post(new Runnable() {
-                @Override public void run() {
-                    capturedTopScroll.fullScroll(HorizontalScrollView.FOCUS_RIGHT);
-                }
-            });
-        }
+        (playerSide?capturedArea:capturedTopArea).addView(chip);
+        (playerSide?capturedScroll:capturedTopScroll).post(()->(playerSide?capturedScroll:capturedTopScroll).fullScroll(HorizontalScrollView.FOCUS_RIGHT));
     }
 
-    /** 点击/拖动战利品后，按用户指定的棋盘落点放回，而不是自动找“附近空位”。 */
-    private void returnTrophyToCell(final PieceView victim, final int r, final int c) {
-        if (victim == null || !isCaptured(victim)) return;
-        if (game.pieceAt(r, c) != 0) {
-            Toast.makeText(this, "这个落点已有棋子", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        removeTrophyChip(victim);
-        if (victim.isRed) capturedRed.remove(victim);
-        else capturedBlack.remove(victim);
-
-        game.put(r, c, victim.kind);
-        victim.setEnabled(true);
-        victim.setVisibility(View.VISIBLE);
-        victim.setSelected(false);
-        victim.setScaleX(1f);
-        victim.setScaleY(1f);
-        victim.setAlpha(1f);
-        victim.place(r, c);
-        if (!pieces.contains(victim)) {
-            pieces.add(victim);
-        }
-        selectedTrophy = null;
-        playSnd(sndMove);
-        lockMoveAnimation(140);
+    private void startTrophyGhost(char kind,boolean playerSide,float rawX,float rawY){
+        FrameLayout root=findViewById(R.id.rootContainer);int side=dp(46);
+        dragGhost=new TextView(this);dragGhost.setText(String.valueOf(kind));dragGhost.setGravity(Gravity.CENTER);dragGhost.setTextSize(18);dragGhost.setTextColor(getResources().getColor(playerSide?R.color.black_piece:R.color.red_piece));dragGhost.setBackgroundResource(R.drawable.bubble_bg);dragGhost.setAlpha(0.92f);dragGhost.setClickable(false);
+        FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(side,side);root.addView(dragGhost,lp);moveTrophyGhost(rawX,rawY);
     }
-
-    private boolean isCaptured(PieceView victim) {
-        return capturedRed.contains(victim) || capturedBlack.contains(victim);
+    private void moveTrophyGhost(float rawX,float rawY){
+        if(dragGhost==null)return;int[] loc=new int[2];View root=findViewById(R.id.rootContainer);root.getLocationOnScreen(loc);float side=dragGhost.getLayoutParams().width;dragGhost.setX(rawX-loc[0]-side/2f);dragGhost.setY(rawY-loc[1]-side/2f);
     }
+    private void removeTrophyGhost(){if(dragGhost!=null){ViewParent p=dragGhost.getParent();if(p instanceof ViewGroup)((ViewGroup)p).removeView(dragGhost);dragGhost=null;}}
 
-    private void removeTrophyChip(PieceView victim) {
-        TextView chip = trophyChips.remove(victim);
-        if (chip == null) return;
-        ViewGroup parent = (ViewGroup) chip.getParent();
-        if (parent != null) parent.removeView(chip);
+    private void returnTrophyToCell(PieceView victim,int r,int c){
+        if(victim==null||!isCaptured(victim)||game.pieceAt(r,c)!=0)return;
+        removeTrophyChip(victim);if(victim.isRed)capturedRed.remove(victim);else capturedBlack.remove(victim);game.put(r,c,victim.kind);if(!pieces.contains(victim))pieces.add(victim);victim.setEnabled(true);victim.setVisibility(View.VISIBLE);victim.setSelected(false);victim.restoreTo(r,c);selectedTrophy=null;playSnd(sndMove);lockMoveAnimation(140);updateTurnStatus();
     }
-
-    private void clearTrophySelection() {
-        if (selectedTrophy != null) {
-            TextView chip = trophyChips.get(selectedTrophy);
-            if (chip != null) chip.setSelected(false);
-            selectedTrophy = null;
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (sounds != null) sounds.release();
-    }
+    private boolean isCaptured(PieceView v){return capturedRed.contains(v)||capturedBlack.contains(v);}
+    private void removeTrophyChip(PieceView victim){TextView chip=trophyChips.remove(victim);if(chip==null)return;ViewGroup parent=(ViewGroup)chip.getParent();if(parent!=null)parent.removeView(chip);}
+    private void clearTrophySelection(){if(selectedTrophy!=null){TextView chip=trophyChips.get(selectedTrophy);if(chip!=null){chip.setSelected(false);chip.setTranslationX(0);chip.setTranslationY(0);}selectedTrophy=null;}}
+    @Override protected void onDestroy(){removeTrophyGhost();super.onDestroy();if(sounds!=null)sounds.release();}
 }
