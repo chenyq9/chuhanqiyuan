@@ -23,10 +23,17 @@ public class GameLogic {
 
     /** 执行移动（物理层面：拿起点子放进终点格）。返回被吃掉的子（0=没吃）。 */
     public char move(int fr, int fc, int tr, int tc) {
+        if (!inBounds(fr, fc) || !inBounds(tr, tc)) return 0;
+        char moving = b[fr * 9 + fc];
+        if (moving == 0) return 0;
         char cap = b[tr * 9 + tc];
-        b[tr * 9 + tc] = b[fr * 9 + fc];
+        b[tr * 9 + tc] = moving;
         b[fr * 9 + fc] = 0;
         return cap;
+    }
+
+    public boolean inBounds(int row, int col) {
+        return row >= 0 && row <= 9 && col >= 0 && col <= 8;
     }
 
     public void reset() {
