@@ -38,7 +38,8 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     private final List<PieceView> pieces=new ArrayList<>();
     private final List<PieceView> capturedRed=new ArrayList<>(); // 被黑吃掉的红子
     private final List<PieceView> capturedBlack=new ArrayList<>(); // 被红吃掉的黑子
-    private TextView tvBubble,tvEat,tvTurnStatus;
+    private TextView tvBubble,tvEat,tvTurnStatus,tvAiName;
+    private View aiAvatar;
     private LinearLayout capturedArea,capturedTopArea,bottomPanel;
     private HorizontalScrollView capturedScroll,capturedTopScroll;
     private final Map<PieceView,TextView> trophyChips=new HashMap<>();
@@ -62,7 +63,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     @Override protected void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);setContentView(R.layout.activity_main);
         board=findViewById(R.id.boardView);tvBubble=findViewById(R.id.tvBubble);tvEat=findViewById(R.id.tvEat);
-        tvTurnStatus=findViewById(R.id.tvTurnStatus);bottomPanel=findViewById(R.id.bottomPanel);
+        tvTurnStatus=findViewById(R.id.tvTurnStatus);tvAiName=findViewById(R.id.tvAiName);aiAvatar=findViewById(R.id.aiAvatar);bottomPanel=findViewById(R.id.bottomPanel);
         capturedArea=findViewById(R.id.capturedArea);capturedScroll=findViewById(R.id.capturedScroll);
         capturedTopArea=findViewById(R.id.capturedTopArea);capturedTopScroll=findViewById(R.id.capturedTopScroll);etInput=findViewById(R.id.etInput);
         sp=getSharedPreferences("chuhan",MODE_PRIVATE);
@@ -155,9 +156,19 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
 
     private void updateTurnStatus(){
         if(tvTurnStatus==null)return;
-        if(aiBusy){tvTurnStatus.setVisibility(View.VISIBLE);tvTurnStatus.setText("● 对方正在思考…");}
-        else if(freeMode){tvTurnStatus.setVisibility(View.VISIBLE);tvTurnStatus.setText("● 自由操作中");}
-        else tvTurnStatus.setVisibility(View.GONE);
+        if(aiBusy){
+            tvTurnStatus.setVisibility(View.VISIBLE);
+            tvTurnStatus.setText("● 对方正在思考…");
+            tvTurnStatus.setAlpha(1f);
+            if(tvAiName!=null)tvAiName.setText("AI 棋友");
+        }else if(freeMode){
+            tvTurnStatus.setVisibility(View.VISIBLE);
+            tvTurnStatus.setText("● 自由操作中");
+            if(tvAiName!=null)tvAiName.setText("AI 棋友");
+        }else{
+            tvTurnStatus.setVisibility(View.INVISIBLE);
+            if(tvAiName!=null)tvAiName.setText("AI 棋友");
+        }
     }
     private void addChat(String who,String text){
         if(text==null||text.trim().isEmpty())return;
@@ -199,8 +210,16 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
 
     private boolean inputBlocked(){return aiBusy||moveAnimating;}
     private void lockMoveAnimation(long ms){moveAnimating=true;ui.postDelayed(()->{moveAnimating=false;},ms);}
-    private void clearLastAiMove(){if(lastAiPiece!=null){lastAiPiece.setLastMoveHighlighted(false);lastAiPiece=null;}}
-    private void markAiPiece(PieceView pv){clearLastAiMove();lastAiPiece=pv;pv.setLastMoveHighlighted(true);pv.startLastMovePulse();}
+    private void clearLastAiMove(){
+        if(lastAiPiece!=null){lastAiPiece.setLastMoveHighlighted(false);lastAiPiece=null;}
+        if(board!=null)board.clearAiMoveMarker();
+    }
+    private void markAiPiece(PieceView pv){
+        if(lastAiPiece!=null && lastAiPiece!=pv)lastAiPiece.setLastMoveHighlighted(false);
+        lastAiPiece=pv;
+        pv.setLastMoveHighlighted(true);
+        pv.startLastMovePulse();
+    }
 
     private void retryAi(String reason){
         if(aiInvalidAttempts>=2){aiBusy=false;updateTurnStatus();showBubble("AI",reason);addChat("AI",reason);return;}
@@ -320,6 +339,8 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         if(m.tr<0||m.tr>9||m.tc<0||m.tc>8){ai.noteToolMiss(m.from+m.to);retryAi("目标"+m.to+"超出棋盘。");return;}
         PieceView victim=findPieceAt(m.tr,m.tc,mover);
         if(victim!=null&&victim.isRed==mover.isRed){ai.noteToolMiss(m.from+m.to);retryAi("目标"+m.to+"已经有自己这一方的棋子，现实棋盘放不下两颗。");return;}
+        // 在真正移动之前记录 AI 的起点和终点；棋子移动后，起点仍留在棋盘上。
+        board.setAiMoveMarker(m.fr,m.fc,m.tr,m.tc);
         game.move(m.fr,m.fc,m.tr,m.tc);moveAnimating=true;final boolean capture=victim!=null;
         tvTurnStatus.setText("● 对方正在落子…");
         mover.glideForAi(m.tr,m.tc,()->{moveAnimating=false;markAiPiece(mover);updateTurnStatus();});
