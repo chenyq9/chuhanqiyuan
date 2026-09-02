@@ -26,7 +26,7 @@ jobs:
 
   instrumented-test:
     name: Emulator UI Tests (tap-to-move)
-    runs-on: macos-13
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -42,6 +42,10 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+      - name: Enable KVM access for emulator
+        run: |
+          sudo chmod 666 /dev/kvm || true
+          ls -la /dev/kvm || echo NO_KVM_DEVICE
       - name: Run instrumentation tests on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
