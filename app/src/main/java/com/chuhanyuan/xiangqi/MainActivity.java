@@ -395,7 +395,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         victim.animate().cancel();
         victim.setEnabled(false);
         victim.setVisibility(View.INVISIBLE);
-        addTrophyChip(toPlayerSide, victim.kind, victim);
+        addTrophyChip(captureByRed, victim.kind, victim);
     }
 
     private void maybeTriggerAi() {
