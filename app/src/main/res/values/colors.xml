@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="table_bg">#C9A876</color>
+    <color name="table_dark">#5D4037</color>
+    <color name="board_wood">#D9B380</color>
+    <color name="board_line">#4A2C0F</color>
+    <color name="river_bg">#E2C290</color>
+    <color name="red_piece">#B71C1C</color>
+    <color name="black_piece">#212121</color>
+    <color name="piece_face">#F5E9D3</color>
+    <color name="bubble_bg">#F1E3C8</color>
+    <color name="gold_accent">#8D6E3F</color>
+</resources>

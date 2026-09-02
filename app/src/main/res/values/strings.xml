@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">楚汉棋缘</string>
+    <string name="new_game">重新开局</string>
+    <string name="settings">设置</string>
+    <string name="say_something">说点什么…</string>
+    <string name="send">送</string>
+    <string name="api_base_url">API 地址（如 https://api.deepseek.com/v1）</string>
+    <string name="api_key">API Key</string>
+    <string name="model_name">模型名（如 deepseek-chat）</string>
+    <string name="save">保存</string>
+    <string name="setup_hint">配置你的 AI 棋友（OpenAI 兼容接口）</string>
+</resources>
