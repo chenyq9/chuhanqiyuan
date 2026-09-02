@@ -46,9 +46,11 @@ public class BoardView extends FrameLayout {
         if (w <= 0 || h <= 0) return;
         // 9个点只有8个横向间隔，10个点只有9个纵向间隔。
         // 旧算法把宽度除以9，会把棋盘缩窄，导致视觉上偏移、边缘不好点。
-        float safeW = Math.max(1, w - dp(16));
-        float safeH = Math.max(1, h - dp(8));
-        tile = Math.min(safeW / 8f, safeH / 9f);
+        float safeW = Math.max(1, w);
+        float safeH = Math.max(1, h);
+        // 给最外圈棋子预留半径，保证左右两颗棋子不会被 View 边缘裁掉。
+        // 9 个竖直位置之间只有 8 个间隔，1 个棋子直径约 0.9*tile。
+        tile = Math.min(safeW / 8.9f, safeH / 9.9f);
         boardW = 8f * tile;
         boardH = 9f * tile;
         originX = (w - boardW) / 2f;
@@ -103,9 +105,8 @@ public class BoardView extends FrameLayout {
         cv.drawLine(x(3),y(7),x(5),y(9),line);
         cv.drawLine(x(5),y(7),x(3),y(9),line);
 
-        // 标准位置：炮在(2,1)(2,7)(7,1)(7,7)，兵卒在(3/6,偶数列)。
+        // 只保留四个初始炮位的夹线记号。这样九宫格上方两个角不会再出现多余的双线。
         mark(cv,1,2); mark(cv,7,2); mark(cv,1,7); mark(cv,7,7);
-        for(int c=0;c<=8;c+=2){ mark(cv,c,3); mark(cv,c,6); }
 
         int alpha=text.getAlpha();
         text.setTextAlign(Paint.Align.CENTER);
