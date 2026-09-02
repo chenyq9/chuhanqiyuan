@@ -87,10 +87,12 @@ public class PieceView extends AppCompatTextView {
             case MotionEvent.ACTION_CANCEL:
                 dragging=false;updateBg();
                 if(moved&&e.getActionMasked()==MotionEvent.ACTION_UP){
-                    float cx=getX()+getTranslationX()+getLayoutParams().width/2f;
-                    float cy=getY()+getTranslationY()+getLayoutParams().height/2f;
+                    // ACTION_UP 的 raw 坐标就是用户真正松手的位置。
+                    // 旧实现把 getX()/getY() 与 translationX/Y 重复叠加，
+                    // 会导致拖动中的棋子实际目标点发生偏移，出现“必须越过目标棋子才能吃”的问题。
                     int[] loc=new int[2]; board.getLocationOnScreen(loc);
                     float bx=e.getRawX()-loc[0], by=e.getRawY()-loc[1];
+                    float cx=bx, cy=by;
                     float half=board.getTile()*0.58f;
                     float left=board.getOriginX()-half, right=board.getOriginX()+board.getTile()*8f+half;
                     float top=board.getOriginY()-half, bottom=board.getOriginY()+board.getTile()*9f+half;
