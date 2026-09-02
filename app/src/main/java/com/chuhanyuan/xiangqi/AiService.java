@@ -30,7 +30,7 @@ public class AiService {
             "只想聊天、观棋、评价局势时，不要调用工具，直接回复文字。说话像面对面下棋的朋友：简短、口语、有点性情。";
 
     private static final String TOOL_JSON =
-            "{\"type\":\"function\",\"function\":{\"name\":\"move_piece\",\"description\":\"拿起一枚棋子放到另一格。要走棋时调用；只聊天则不调用。\",\"parameters\":{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\",\"description\":\"起点坐标，如 b2\"},\"to\":{\"type\":\"string\",\"description\":\"终点坐标，如 e4\"},\"say\":{\"type\":\"string\",\"description\":\"走棋时想说的一句话，可为空字符串\"}},\"required\":[\"from\",\"to\",\"say\"]}}}";
+            "{\"type\":\"function\",\"function\":{\"name\":\"move_piece\",\"description\":\"像真人一样拿起自己的一枚红棋放到另一格。终点为空就是普通落子，终点有朋友的黑棋就是吃子。要走棋时调用；只聊天则不调用。\",\"parameters\":{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\",\"description\":\"起点坐标，如 b2\"},\"to\":{\"type\":\"string\",\"description\":\"终点坐标，如 e4\"},\"say\":{\"type\":\"string\",\"description\":\"走棋时想说的一句话，可为空字符串\"}},\"required\":[\"from\",\"to\",\"say\"]}}}";
 
     public AiService(String base, String key, String model) {
         String b = base.trim();
@@ -96,6 +96,7 @@ public class AiService {
         os.close();
         int code = conn.getResponseCode();
         java.io.InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        if (is == null) is = conn.getInputStream();
         BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
         StringBuilder out = new StringBuilder();
         String ln;
@@ -119,8 +120,15 @@ public class AiService {
     public static Move firstMove(String body) {
         int tc = body.indexOf("\"tool_calls\"");
         if (tc < 0) return null;
-        int args = body.indexOf("\"arguments\"", tc);
+        int fn = body.indexOf("\"function\"", tc);
+        if (fn < 0) return null;
+        int name = body.indexOf("\"name\"", fn);
+        int args = body.indexOf("\"arguments\"", fn);
         if (args < 0) return null;
+        if (name >= 0 && name < args) {
+            String functionName = readStringAt(body, indexOfKey(body, "name"));
+            if (!"move_piece".equals(functionName)) return null;
+        }
         int colon = body.indexOf(':', args);
         int p = colon + 1;
         while (p < body.length() && Character.isWhitespace(body.charAt(p))) p++;
