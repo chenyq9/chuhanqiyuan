@@ -25,13 +25,14 @@ public class AiService {
     private static final String SYSTEM_PROMPT=
             "你正在和朋友面对面下中国象棋，但这是一张模拟真实棋盘的自由棋盘。最重要的是像真人朋友：拿起一颗棋子，放到另一格；不要因为传统象棋规则而拒绝走法。任何棋子都可以移动到任何空格，终点若有对方棋子就表示吃子。\n"+
             "你执红棋、坐在棋盘上方（行0一侧），朋友执黑棋、坐在下方（行9一侧）。坐标列a-i从左到右、行0-9从上到下。\n"+
-            "默认轮到你时用 move_piece 移动自己的红棋；你可以吃朋友的黑棋。只有朋友明确让你替他走、让你帮他操作时，才用 move_friend_piece 移动朋友的黑棋。朋友明确让你把已经吃掉的棋重新放回棋盘时，可以用 return_captured_piece。一次回复只做一个实际的物理动作。可以顺便说一句很自然的话，也可以不说。";
+            "默认轮到你时用 move_piece 移动自己的红棋；你可以吃朋友的黑棋。只有朋友明确让你替他走、让你帮他操作时，才用 move_friend_piece 移动朋友的黑棋。朋友明确让你把已经吃掉的棋重新放回棋盘时，可以用 return_captured_piece；如果朋友明确让你把整张棋盘清空、把棋子整理回双方各自区域，可以用 clear_board。一次回复只做一个实际的物理动作。可以顺便说一句很自然的话，也可以不说。";
 
     private static final String TOOLS=
             "["+
             "{\"type\":\"function\",\"function\":{\"name\":\"move_piece\",\"description\":\"移动AI自己的红棋。目标为空=落子，目标有朋友黑棋=吃子。完全不按传统象棋规则限制。\",\"parameters\":{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"},\"say\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\",\"say\"]}}},"+
             "{\"type\":\"function\",\"function\":{\"name\":\"move_friend_piece\",\"description\":\"只在朋友明确让你帮他走棋时使用，移动朋友的黑棋。\",\"parameters\":{\"type\":\"object\",\"properties\":{\"from\":{\"type\":\"string\"},\"to\":{\"type\":\"string\"},\"say\":{\"type\":\"string\"}},\"required\":[\"from\",\"to\",\"say\"]}}},"+
-            "{\"type\":\"function\",\"function\":{\"name\":\"return_captured_piece\",\"description\":\"把已经被吃、正在战利品区的一颗棋子重新放到指定空格。capturedSide填red或black；piece填棋子汉字；occurrence是同名棋子的序号，从1开始。\",\"parameters\":{\"type\":\"object\",\"properties\":{\"capturedSide\":{\"type\":\"string\",\"enum\":[\"red\",\"black\"]},\"piece\":{\"type\":\"string\"},\"occurrence\":{\"type\":\"integer\"},\"to\":{\"type\":\"string\"},\"say\":{\"type\":\"string\"}},\"required\":[\"capturedSide\",\"piece\",\"occurrence\",\"to\",\"say\"]}}}"+
+            "{\"type\":\"function\",\"function\":{\"name\":\"return_captured_piece\",\"description\":\"把已经被吃、正在放置区的一颗棋子重新放到指定空格。capturedSide填red或black；piece填棋子汉字；occurrence是同名棋子的序号，从1开始。\",\"parameters\":{\"type\":\"object\",\"properties\":{\"capturedSide\":{\"type\":\"string\",\"enum\":[\"red\",\"black\"]},\"piece\":{\"type\":\"string\"},\"occurrence\":{\"type\":\"integer\"},\"to\":{\"type\":\"string\"},\"say\":{\"type\":\"string\"}},\"required\":[\"capturedSide\",\"piece\",\"occurrence\",\"to\",\"say\"]}}},"+
+            "{\"type\":\"function\",\"function\":{\"name\":\"clear_board\",\"description\":\"把整张棋盘上的所有棋子收回，并把红棋整理到上方红方放置区、黑棋整理到下方黑方放置区。用于朋友明确要求清空、整理全部棋子时。\",\"parameters\":{\"type\":\"object\",\"properties\":{\"say\":{\"type\":\"string\"}},\"required\":[\"say\"]}}}"+
             "]";
 
     public AiService(String base,String key,String model){String b=base==null?"":base.trim();while(b.endsWith("/"))b=b.substring(0,b.length()-1);this.base=b;this.key=key==null?"":key.trim();this.model=model==null?"":model.trim();}
