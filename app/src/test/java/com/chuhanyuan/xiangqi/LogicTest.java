@@ -83,6 +83,10 @@ public class LogicTest {
         AiService.Move m6 = AiService.firstMove(r6);
         check("战利品返还工具解析", m6 != null && "return_captured_piece".equals(m6.action) && m6.capturedSide.equals("black") && m6.pieceKind == '卒' && m6.occurrence == 2 && "e4".equals(m6.to));
 
+        String r7 = "{\"choices\":[{\"message\":{\"tool_calls\":[{\"function\":{\"name\":\"clear_board\",\"arguments\":{\"say\":\"全部收好\"}}}]}}]}";
+        AiService.Move m7 = AiService.firstMove(r7);
+        check("清空棋盘工具解析", m7 != null && "clear_board".equals(m7.action) && "全部收好".equals(m7.say));
+
         // 空盘摆子：初始规格无撞格
         String[] specs = GameLogic.initialSpecs();
         check("初始规格32条", specs.length == 32);
