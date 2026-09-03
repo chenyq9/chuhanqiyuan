@@ -77,7 +77,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         root.setOnApplyWindowInsetsListener((v,insets)->{
             int ime=0;
             if(android.os.Build.VERSION.SDK_INT>=30) ime=insets.getInsets(WindowInsets.Type.ime()).bottom;
-            if(ime>0) bottomPanel.setTranslationY(-ime); else if(android.os.Build.VERSION.SDK_INT>=30) bottomPanel.setTranslationY(0);
+            bottomPanel.setTranslationY(0);
             return insets;
         });
         // Android 7~10 没有 Type.ime，用可见区域检测键盘高度。
@@ -86,7 +86,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
                 android.graphics.Rect rect=new android.graphics.Rect();root.getWindowVisibleDisplayFrame(rect);
                 int diff=root.getRootView().getHeight()-rect.bottom;
                 int keyboard=diff>dp(80)?diff:0;
-                bottomPanel.setTranslationY(-keyboard);
+                bottomPanel.setTranslationY(0);
             });
         }
         root.requestApplyInsets();
@@ -100,17 +100,21 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     }
 
     private void setupButtons(){
-        ImageView btnNew=findViewById(R.id.btnNew),btnCfg=findViewById(R.id.btnCfg),btnChat=findViewById(R.id.btnChat);
-        Button btnFree=findViewById(R.id.btnFree);
+        ImageView btnNew=findViewById(R.id.btnNew),btnCfg=findViewById(R.id.btnCfg),btnChat=findViewById(R.id.btnChat),btnClear=findViewById(R.id.btnClear);
+        TextView btnFree=findViewById(R.id.btnFree);
         btnNew.setOnClickListener(v->newGame());
         btnCfg.setOnClickListener(v->startActivity(new Intent(MainActivity.this,SettingsActivity.class)));
         btnChat.setOnClickListener(v->showChatDialog());
+        btnClear.setOnClickListener(v->{
+            if(aiBusy||moveAnimating){Toast.makeText(this,"请等当前动作结束",Toast.LENGTH_SHORT).show();return;}
+            clearBoardToZones(true,"你把棋盘上的棋子全部收回了双方放置区。");
+        });
         btnFree.setOnClickListener(v->{
             if(aiBusy){Toast.makeText(this,"对方正在思考，先等这一手结束",Toast.LENGTH_SHORT).show();return;}
             freeMode=!freeMode;
             if(freeMode){
                 if(pendingAiTurn!=null)ui.removeCallbacks(pendingAiTurn);
-                btnFree.setText("自由✓");
+                btnFree.setText("自由中");
                 btnFree.setSelected(true);
                 showBubble("系统","自由操作已打开：你可以随意移动任意一方的棋子，暂时不会发给 AI。");
             }else{
@@ -129,7 +133,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
             if(freeMode)return;
             requestAi("【棋友说】"+text,false);
         });
-        btnFree.setText(freeMode?"自由✓":"自由");
+        btnFree.setText(freeMode?"自由中":"自由");
     }
 
     private void newGame(){
@@ -144,7 +148,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         for(PieceView pv:pieces){pv.setLastMoveHighlighted(false);pv.setEnabled(true);pv.setVisibility(View.VISIBLE);}
         capturedRed.clear();capturedBlack.clear();capturedArea.removeAllViews();capturedTopArea.removeAllViews();trophyChips.clear();
         selectedPiece=null;selectedTrophy=null;clearLastAiMove();aiInvalidAttempts=0;moveAnimating=false;aiBusy=false;freeMode=false;sendFullBoardNext=true;movesSinceSnapshot=0;
-        Button btnFree=findViewById(R.id.btnFree);if(btnFree!=null){btnFree.setText("自由");btnFree.setSelected(false);}
+        TextView btnFree=findViewById(R.id.btnFree);if(btnFree!=null){btnFree.setText("自由");btnFree.setSelected(false);}
         clearChat();updateTurnStatus();
         if(!fresh)for(PieceView pv:pieces)pv.flyHome(pv.getHomeRow(),pv.getHomeCol()); else board.post(this::relayoutAll);
         if(ai!=null)ai.resetHistory();if(pendingAiTurn!=null)ui.removeCallbacks(pendingAiTurn);
@@ -189,7 +193,8 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     private String boardContext(){
         StringBuilder sb=new StringBuilder(game.boardText());
         sb.append("\n当前战利品区（已经被吃、离开棋盘的棋子）：\n");
-        appendCaptured(sb,"红棋（被黑吃）",capturedRed);appendCaptured(sb,"黑棋（被红吃）",capturedBlack);
+        appendCaptured(sb,"红棋（当前放置区中的红棋）",capturedRed);appendCaptured(sb,"黑棋（当前放置区中的黑棋）",capturedBlack);
+        sb.append("提示：上方是AI红方对应放置区，下方是朋友黑方对应放置区；棋子也可能被手动拖到对方区域。\n");
         return sb.toString();
     }
     private void appendCaptured(StringBuilder sb,String title,List<PieceView> list){
@@ -270,9 +275,14 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
 
     @Override public void onPieceDroppedOutside(PieceView pv,float rawX,float rawY){
         if(inputBlocked()){pv.glide(pv.getRow(),pv.getCol(),null);return;}
-        // 像现实里把棋子拿到桌边的“被吃子区”：松手就停在那里，不弹文字提示。
+        // 上方/下方都是实际的棋子放置区：红方可拖到上方，黑方可拖到下方，
+        // 也允许把任意颜色的棋子拖到“对方”的放置区。
+        if(isInsideView(capturedTopScroll,rawX,rawY)){
+            parkPieceInArea(pv,true);
+            return;
+        }
         if(isInsideView(capturedScroll,rawX,rawY)){
-            parkPieceInBottomArea(pv);
+            parkPieceInArea(pv,false);
             return;
         }
         pv.glide(pv.getRow(),pv.getCol(),null);
@@ -285,17 +295,17 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
                 &&rawY>=loc[1]&&rawY<=loc[1]+v.getHeight();
     }
 
-    private void parkPieceInBottomArea(PieceView pv){
+    private void parkPieceInArea(PieceView pv,boolean topZone){
         if(pv==null||!pieces.contains(pv))return;
         int r=pv.getRow(),c=pv.getCol();
         game.put(r, c, (char)0); // 清空格
         pieces.remove(pv);
         if(pv.isRed)capturedRed.add(pv);else capturedBlack.add(pv);
         pv.animate().cancel();pv.setSelected(false);pv.setEnabled(false);pv.setVisibility(View.INVISIBLE);
-        addTrophyChip(true,pv.kind,pv);
+        addTrophyChip(topZone,pv.kind,pv);
         playSnd(sndMove);
         lockMoveAnimation(120);
-        afterPlayerMove("把"+pv.kind+"放到了下方被吃子区");
+        afterPlayerMove("把"+pv.kind+"放到了"+(topZone?"上方":"下方")+"放置区");
     }
 
     private PieceView findPieceAt(int r,int c,PieceView exclude){for(PieceView pv:pieces)if(pv!=exclude&&pv.getRow()==r&&pv.getCol()==c&&pv.isEnabled())return pv;return null;}
@@ -304,6 +314,38 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     private void movePieceToTrophy(PieceView victim,boolean captureByRed){
         pieces.remove(victim);(captureByRed?capturedBlack:capturedRed).add(victim);selectedTrophy=null;
         victim.animate().cancel();victim.setLastMoveHighlighted(false);victim.setEnabled(false);victim.setVisibility(View.INVISIBLE);addTrophyChip(captureByRed,victim.kind,victim);
+    }
+
+    /**
+     * 清空棋盘并把全部32枚棋子重新整理到双方自己的放置区：红棋上方，黑棋下方。
+     * 已经在错误/对方区域的战利品也一并重新归位。
+     */
+    private void clearBoardToZones(boolean addSystemChat,String delta){
+        if(pendingAiTurn!=null)ui.removeCallbacks(pendingAiTurn);
+        List<PieceView> all=new ArrayList<>();
+        for(PieceView pv:pieces)if(!all.contains(pv))all.add(pv);
+        for(PieceView pv:capturedRed)if(!all.contains(pv))all.add(pv);
+        for(PieceView pv:capturedBlack)if(!all.contains(pv))all.add(pv);
+
+        for(PieceView pv:all){
+            game.put(pv.getRow(), pv.getCol(), (char)0); // 清空格
+            pv.animate().cancel();
+            pv.setSelected(false);
+            pv.setLastMoveHighlighted(false);
+        }
+        pieces.clear();capturedRed.clear();capturedBlack.clear();
+        capturedTopArea.removeAllViews();capturedArea.removeAllViews();trophyChips.clear();
+        selectedPiece=null;selectedTrophy=null;removeTrophyGhost();
+
+        for(PieceView pv:all){
+            if(pv.isRed)capturedRed.add(pv);else capturedBlack.add(pv);
+            pv.setEnabled(false);pv.setVisibility(View.INVISIBLE);
+            addTrophyChip(pv.isRed,pv.kind,pv);
+        }
+        board.clearAiMoveMarker();lastAiPiece=null;
+        sendFullBoardNext=true;movesSinceSnapshot=0;moveAnimating=false;
+        if(addSystemChat){addChat("系统",delta);showBubble("系统",delta);}
+        playSnd(sndMove);
     }
 
     private void afterPlayerMove(String delta){
@@ -328,6 +370,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
             case "move_piece": executeAiMove(m,true); break;
             case "move_friend_piece": executeAiMove(m,false); break;
             case "return_captured_piece": executeAiReturnCaptured(m); break;
+            case "clear_board": executeAiClearBoard(); break;
             default: retryAi("他说要做一个软件还不认识的动作："+m.action); break;
         }
     }
@@ -360,6 +403,13 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
         updateTurnStatus();
     }
 
+    private void executeAiClearBoard(){
+        clearBoardToZones(false,"AI把所有棋子收回了双方对应的放置区。");
+        addChat("系统","AI把所有棋子收回了双方对应的放置区。");
+        showBubble("AI","我先把棋盘收干净了，棋子都放回各自区域。");
+        updateTurnStatus();
+    }
+
     private PieceView findNthCaptured(List<PieceView> list,char kind,int occurrence){int n=0;for(PieceView pv:list)if(kind==0||pv.kind==kind){n++;if(n==Math.max(1,occurrence))return pv;}return null;}
 
     private void showEatEffect(){
@@ -369,7 +419,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
     private void showBubble(String who,String text){tvBubble.setText(who+"："+text);tvBubble.animate().cancel();tvBubble.setAlpha(1f);tvBubble.setVisibility(View.VISIBLE);ui.removeCallbacks(bubbleHider);ui.postDelayed(bubbleHider,4000);}
     private void playSnd(int id){if(sounds!=null&&id!=0)sounds.play(id,1f,1f,1,0,1f);}
 
-    private void addTrophyChip(boolean playerSide,char kind,final PieceView victim){
+    private void addTrophyChip(boolean topZone,char kind,final PieceView victim){
         final TextView chip=new TextView(this);chip.setText(String.valueOf(kind));chip.setGravity(Gravity.CENTER);int side=dp(42);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(side,side);lp.setMargins(dp(3),dp(4),dp(3),dp(4));chip.setLayoutParams(lp);chip.setTextSize(18);chip.setTextColor(getResources().getColor(victim.isRed?R.color.red_piece:R.color.black_piece));chip.setBackgroundResource(R.drawable.bubble_bg);trophyChips.put(victim,chip);
         chip.setOnTouchListener(new View.OnTouchListener(){float downX,downY;boolean moved;
             @Override public boolean onTouch(View v,MotionEvent e){
@@ -379,7 +429,7 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
                         if(selectedTrophy!=null&&selectedTrophy!=victim)clearTrophySelection();selectedTrophy=victim;v.setSelected(true);v.animate().cancel();v.setScaleX(1.1f);v.setScaleY(1.1f);showBubble("系统","想放回哪？把它拖到想去的棋盘格，或点它后再点棋盘。" );return true;
                     case MotionEvent.ACTION_MOVE:
                         float dx=e.getRawX()-downX,dy=e.getRawY()-downY;
-                        if(Math.abs(dx)>dp(6)||Math.abs(dy)>dp(6)){moved=true;if(dragGhost==null){startTrophyGhost(kind,playerSide,e.getRawX(),e.getRawY());v.setAlpha(0.15f);}else moveTrophyGhost(e.getRawX(),e.getRawY());}
+                        if(Math.abs(dx)>dp(6)||Math.abs(dy)>dp(6)){moved=true;if(dragGhost==null){startTrophyGhost(kind,victim.isRed,e.getRawX(),e.getRawY());v.setAlpha(0.15f);}else moveTrophyGhost(e.getRawX(),e.getRawY());}
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
@@ -393,13 +443,13 @@ public class MainActivity extends AppCompatActivity implements PieceView.OnPiece
                 }return false;
             }
         });
-        (playerSide?capturedArea:capturedTopArea).addView(chip);
-        (playerSide?capturedScroll:capturedTopScroll).post(()->(playerSide?capturedScroll:capturedTopScroll).fullScroll(HorizontalScrollView.FOCUS_RIGHT));
+        (topZone?capturedTopArea:capturedArea).addView(chip);
+        (topZone?capturedTopScroll:capturedScroll).post(()->(topZone?capturedTopScroll:capturedScroll).fullScroll(HorizontalScrollView.FOCUS_RIGHT));
     }
 
-    private void startTrophyGhost(char kind,boolean playerSide,float rawX,float rawY){
+    private void startTrophyGhost(char kind,boolean isRed,float rawX,float rawY){
         FrameLayout root=findViewById(R.id.rootContainer);int side=dp(46);
-        dragGhost=new TextView(this);dragGhost.setText(String.valueOf(kind));dragGhost.setGravity(Gravity.CENTER);dragGhost.setTextSize(18);dragGhost.setTextColor(getResources().getColor(playerSide?R.color.black_piece:R.color.red_piece));dragGhost.setBackgroundResource(R.drawable.bubble_bg);dragGhost.setAlpha(0.92f);dragGhost.setClickable(false);
+        dragGhost=new TextView(this);dragGhost.setText(String.valueOf(kind));dragGhost.setGravity(Gravity.CENTER);dragGhost.setTextSize(18);dragGhost.setTextColor(getResources().getColor(isRed?R.color.red_piece:R.color.black_piece));dragGhost.setBackgroundResource(R.drawable.bubble_bg);dragGhost.setAlpha(0.92f);dragGhost.setClickable(false);
         FrameLayout.LayoutParams lp=new FrameLayout.LayoutParams(side,side);root.addView(dragGhost,lp);moveTrophyGhost(rawX,rawY);
     }
     private void moveTrophyGhost(float rawX,float rawY){
